@@ -9,3 +9,4 @@ Where raw data is stored on pegasus: /groups/cbi/Users/rclement
 
 ## Steps
 1. [Setup](setup.md)
+* [Setup for 16S](setup16S.md)
