@@ -9,3 +9,5 @@ Here is the termite genome from [Macrotermes natalensis](https://www.ncbi.nlm.ni
 1) find a script that builds a dabase
 
 umask 0022 changes permissions
+
+look in /groups/cbi/Databases/Genomes/scripts/
