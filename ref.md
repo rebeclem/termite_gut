@@ -11,3 +11,9 @@ Here is the termite genome from [Macrotermes natalensis](https://www.ncbi.nlm.ni
 umask 0022 changes permissions
 
 look in /groups/cbi/Databases/Genomes/scripts/
+
+make a list of the accession numbers. Run pull_seqs_from_acc.py to pull the sequences from NCBI.
+
+It has to be the right version of python. and you have to `pip install biopython`. 
+
+Look up what split does. 
