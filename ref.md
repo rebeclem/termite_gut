@@ -4,7 +4,9 @@ Here is the [16S database](http://www.termites.de/databases/DictDb/) that is fro
 
 Here is the termite genome from [Zootermopsis nevadensis](https://www.ncbi.nlm.nih.gov/nuccore/AUST00000000) from [this paper](https://www.nature.com/articles/ncomms4636).
 
-Here is the termite genome from [Macrotermes natalensis](https://www.ncbi.nlm.nih.gov/sra?term=SRA069856) from [this paper](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4209977/#d35e678)
+Here is the termite genome from [Macrotermes natalensis](https://www.ncbi.nlm.nih.gov/sra?term=SRA069856) from [this paper](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4209977/#d35e678). This is its [mitochondria](https://www.ncbi.nlm.nih.gov/nuccore/NC_025522).
+
+Termite mitochondrial genome from [Nasutitermes exitiosus](https://www.ncbi.nlm.nih.gov/Traces/wgs/CEME01?display=contigs)
 
 1) find a script that builds a dabase
 
