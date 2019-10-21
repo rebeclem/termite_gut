@@ -19,3 +19,15 @@ make a list of the accession numbers. Run pull_seqs_from_acc.py to pull the sequ
 It has to be the right version of python. and you have to `pip install biopython`. 
 
 Look up what split does. 
+
+
+## To make the Nasutitermes exitiosus database:
+First I downloaded the list of accessions [from NCBI](https://www.ncbi.nlm.nih.gov/Traces/wgs/CEME01?display=contigs).
+
+Then I got out just the list of accessions:
+awk '{print $2}' CEME01_contigs.tsv > nasExi.txt
+Then I wanted to take off the .1s
+cat nasExi.txt | cut -d"." -f1 > nasExit.txt
+
+Now I'm going to upload this to pegasus
+`copystuff nasExit.txt /groups/cbi/Databases/Genomes/References/Nasutitermes_exitiosus`
