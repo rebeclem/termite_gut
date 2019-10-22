@@ -8,6 +8,10 @@ Here is the termite genome from [Macrotermes natalensis](https://www.ncbi.nlm.ni
 
 Termite mitochondrial genome from [Nasutitermes exitiosus](https://www.ncbi.nlm.nih.gov/Traces/wgs/CEME01?display=contigs)
 
+Here is the link to [Cryptotermes secundus](https://www.ncbi.nlm.nih.gov/bioproject/PRJNA381866).
+
+Here are the manual gene annotations from Z. nev and M. nat. https://datadryad.org/stash/dataset/doi:10.5061/dryad.51d4r
+
 1) find a script that builds a dabase
 
 umask 0022 changes permissions
