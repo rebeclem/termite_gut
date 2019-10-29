@@ -57,3 +57,9 @@ Now you should only have the directories in the folder you're in
 mkdir refs
 mkdir scripts
 ```
+
+### Move into the analysis directory and put the directory names into a file called samp.txt
+```
+cd Analysis
+ls -d * > ../samps.txt
+```
