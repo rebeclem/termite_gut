@@ -12,6 +12,6 @@ Where raw data is stored on pegasus: /groups/cbi/Users/rclement
 * [Setup for 16S](setup16S.md)
 2. Set up [reference databases](ref.md)
 3. [FastQC and Flexbar](fastqc.md)
-4. [Count](count.md) cleaned and raw reads
+4. [Count](readcounts.md) cleaned and raw reads
 5. [Run pathoscope](pathoscope.md) and count reads
 6. Visualize data
