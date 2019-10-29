@@ -52,6 +52,10 @@ All of the files can be opened up through Safari/Chrome/etc. (whatever internet 
 See this [PDF](FastQC_Manual.pdf) explaining the FastQC results or this [website by the creators of FastQC](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/) that also has explaination of the results. 
 - The PDF was downloaded from the [University of Missouri sequencing core](https://dnacore.missouri.edu).
 
+Our results seem to show that the first 15 bases should probably be romoved, as well as possibly the last 20?
+One sample, Bec6 shows high sequence duplication level. 
+Bec11 has a per tile sequence quality failure and many overrepresented sequences. The per sequence GC content is also concerning.
+
 <br />
 
 Finally, we need to remove unncessary files:
