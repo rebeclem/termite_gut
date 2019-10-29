@@ -8,7 +8,7 @@ Make sure to move all fastqc and other files out of your Analysis directory befo
 cd Analysis &&
 for f in *; do
     cd $f &&
-    python ../../scripts/pulling_readcount.py &&
+    python ../../../scripts/pulling_readcount.py &&
     cd .. &&
     echo $f
 done
