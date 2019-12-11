@@ -18,7 +18,7 @@ umask 0022 changes permissions
 
 look in /groups/cbi/Databases/Genomes/scripts/
 
-make a list of the accession numbers. Run pull_seqs_from_acc.py to pull the sequences from NCBI.
+make a list of the accession numbers. The first line needs to be the first accession number, not the. Run pull_seqs_from_acc.py to pull the sequences from NCBI. You have to have python 3 to run it. (module load python 3).] First line actually has to be an accession. 
 
 It has to be the right version of python. and you have to `pip install biopython`. 
 
@@ -35,3 +35,7 @@ cat nasExi.txt | cut -d"." -f1 > nasExit.txt
 
 Now I'm going to upload this to pegasus
 `copystuff nasExit.txt /groups/cbi/Databases/Genomes/References/Nasutitermes_exitiosus`
+Using vim, remove the first line that says "accession".
+`module load python3`
+`python ../../scripts/nasute_fasta_from_acc.py --email rebeccaclement@gwu.edu nasExit.txt > nasute_out.fasta`
+
