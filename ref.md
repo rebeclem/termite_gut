@@ -12,7 +12,7 @@ Here is the link to [Cryptotermes secundus](https://www.ncbi.nlm.nih.gov/bioproj
 
 Here are the manual gene annotations from Z. nev and M. nat. https://datadryad.org/stash/dataset/doi:10.5061/dryad.51d4r
 
-1) find a script that builds a dabase
+1) find a script that builds a database
 
 umask 0022 changes permissions
 
@@ -38,4 +38,9 @@ Now I'm going to upload this to pegasus
 Using vim, remove the first line that says "accession".
 `module load python3`
 `python ../../scripts/nasute_fasta_from_acc.py --email rebeccaclement@gwu.edu nasExit.txt > nasute_out.fasta`
+
+Now that I have this file, I need to use bowtie to make it into a database. First you have to make sure it's in the right format with ti numbers first. 
+Use the script /groups/cbi/Databases/Genomes/scripts/build_nasute.sh
+
+I need to change the tid in scripts/nasute_fasta_from_acc.py to whatever the nasutitermes tid is. 
 
