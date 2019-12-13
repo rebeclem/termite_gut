@@ -44,3 +44,19 @@ Use the script /groups/cbi/Databases/Genomes/scripts/build_nasute.sh
 
 I need to change the tid in scripts/nasute_fasta_from_acc.py to whatever the nasutitermes tid is. 
 
+
+start in archive. 
+seqIO is your best friend. It allows you to input and output fasta files. `from Bio import SeqIO`
+load fasta into a list
+.id shows you the name
+.seq shows you the sequence
+OUr sequence has U's instead of T's. We need to change that.
+Make a dictionary that has keys and values. 
+for line in open(filename, "r") # r means read. strip off , and ". 
+back_transcribe() might be able to turn Us to Ts. 
+You need to change it so it has this format: >ti|1335r|gi|0|ref|something|
+What I need to do: decide if I want NAs or not. Build the database I want with bowtie.
+Keylie will work on fixing script and put in and rewrite output.
+I will put R script in. 
+when I'm done I can put bowtie2 indexes into bowtie 2. Move the fasta file into wholegenomeFasta
+Use the same script as I used on BowTie2 for the other one. 
