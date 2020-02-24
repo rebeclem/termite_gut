@@ -63,3 +63,12 @@ mkdir scripts
 cd Analysis
 ls -d * > ../samps.txt
 ```
+
+### Now we are going to move these into r to do dada2 following this tutorial. https://benjjneb.github.io/dada2/tutorial.html
+First we need to rename the samples and move them into one folder
+```
+for d in L*/flexcleaned*.fastq;
+do name=$d;
+echo 
+
+for d in */*; do name=$d; newname=${name//-/_}; mv $d $newname; done
