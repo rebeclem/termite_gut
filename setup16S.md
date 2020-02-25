@@ -65,8 +65,10 @@ ls -d * > ../samps.txt
 ```
 
 ### Now we are going to move these into r to do dada2 following this tutorial. https://benjjneb.github.io/dada2/tutorial.html
-First we need to rename the samples and move them into one folder
+First we need to rename the samples and move them into one folder that I made called dada2
 ```
-for d in */*.fastq; do name=$d;  newname=${name}; echo $name; echo $direc; echo $newname; done
+for d in */*.fastq; do name=$d;  newname=${name/"/"/_}; cp $name ../dada2/$newname; echo $newname; done
+```
+Now from my termite microbiome folder on my computer, copy these files over.
+`rsync -avh rebeccaclement@log001.colonialone.gwu.edu:/GWSPH/home/rebeccaclement/glustre/termite_16S/dada2 .`
 
-for d in */*; do name=$d; newname=${name//-/_}; mv $d $newname; done
