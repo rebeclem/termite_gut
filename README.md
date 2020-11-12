@@ -1,9 +1,11 @@
 # termite_gut
 where I'm gonna do my termite gut analyses
 
-[Raw data in illumina](https://basespace.illumina.com/run/189768585/Gibson_Clement_breastmilk_termitegut_0110_20190709) 
+[Raw data in illumina](https://basespace.illumina.com/run/189768585/Gibson_Clement_breastmilk_termitegut_0110_20190709) or [here](https://gwu.app.box.com/folder/81687457352) on box
 
-[Raw data in illumina 16S](https://basespace.illumina.com/projects/138622490/about)
+[Raw data in illumina 16S part one](https://basespace.illumina.com/projects/138622490/about) or [here](https://gwu.app.box.com/folder/82761197082) on box.
+
+[Raw data in illumina 16S part two](https://basespace.illumina.com/projects/205602397) or [here](https://gwu.app.box.com/folder/125030774550) on box.
 
 Where raw data is stored on pegasus: /groups/cbi/Users/rclement
 
