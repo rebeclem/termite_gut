@@ -1,8 +1,19 @@
+### Setting up 16S samples
 This is basically the same setup but for the 16S dataset
-Upload 16S data:
-`rsync -avh 20190716_Clement_termitegut_16S_rerun-138622490/FASTQ_Generation_2019-07-19_08_31_23Z-190047880/ rebeccaclement@pegasus.colonialone.gwu.edu:ggroups/termite_16S`
-Copy data to glustre:
+
+* Make a directory in Rawdata (navigate to /groups/cbi/Users/rclement/Rawdata and use `mkdir termite_16S_2`)
+
+* Upload 16S data from box to groups: Navigate to Box on a Mac, 
+`rsync -avh 20190716_Clement_termitegut_16S_rerun-138622490/FASTQ_Generation_2019-07-19_08_31_23Z-190047880/ rebeccaclement@pegasus.colonialone.gwu.edu:/groups/cbi/Users/rclement/Rawdata/termite_16S_2`
+* Copy data to glustre:
 `rsync -avh * ~/glustre/Rawdata/termite_16S/`
+
+## For screen sharing with the middle computer in the glass classroom at SEH
+* Sign into vpn on to GW network
+* Click command+space bar and search screen sharing
+* The ID for the computer closest to door is vnc://128.164.161.53/
+* Username is Crandall lab and Password is normal
+
 ### Creating a directory for each sample.
 For every file inside a folder that has a L001 and an R1, make an object samp that is the folder name. First the basename makes it so that you get rid of the outside folder. Then you take off the ending that matches -*-*.
 Print the folder name and then make a directory that is called the sample name with a designated prefix. Run this without the mkdir to make sure it's running right.
