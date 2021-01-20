@@ -1,5 +1,9 @@
 ## Copy files to /lustre/groups/cbi/Users/rclement/Rawdata
 
+Navigate to where the files are stored: `cd /groups/cbi/Users/rclement/`
+copy files to lustre: `rsync -avh Rawdata/termite_shotgun/ /lustre/groups/cbi/Users/rclement/Rawdata`
+Navigate to Rawdata directory: `cd /lustre/groups/cbi/Users/rclement/Rawdata'
+
 ### Creating a directory for each sample.
 For every file inside a folder that has a L001 and an R1, make an object samp that is the folder name. First the basename makes it so that you get rid of the outside folder. Then you take off the ending that matches -*-*.
 Print the folder name and then make a directory that is called the sample name with a designated prefix. Run this without the mkdir to make sure it's running right.
@@ -81,7 +85,7 @@ done
 ```
 #### Bacteria references
 ```
-for f in /lustre/groups/cbi/shared/Databases/NCBI_rep_genomes/latest/*.bt2;
+for f in /lustre/groups/cbi/Databases/NCBI/NCBI_refrep_genomes/latest/Sequence/Bowtie2Index/*.bt2;
 do
     ln -s $f
 done
