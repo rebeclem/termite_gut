@@ -1,7 +1,7 @@
 # termite_gut
 where I'm gonna do my termite gut analyses
 
-[Raw data in illumina](https://basespace.illumina.com/run/189768585/Gibson_Clement_breastmilk_termitegut_0110_20190709) or [here](https://gwu.app.box.com/folder/81687457352) on box
+[Raw data in illumina shotgun](https://basespace.illumina.com/run/189768585/Gibson_Clement_breastmilk_termitegut_0110_20190709) or [here](https://gwu.app.box.com/folder/81687457352) on box
 
 [Raw data in illumina 16S part one](https://basespace.illumina.com/projects/138622490/about) or [here](https://gwu.app.box.com/folder/82761197082) on box.
 
