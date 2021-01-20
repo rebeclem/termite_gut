@@ -6,7 +6,7 @@ You must be in the Analysis folder before calling any of the Pathoscope scripts.
 ```
 cd Analysis
 ```
-Replace the 1-91 in the array line with 1-25 for these samples.
+Replace the 1-91 in the array line with 1-12 for these samples.
 ### **_Mapping to Human_**
 You will need the [`pathoscope_human.sh`](pathoscope_human.sh) file. This file is set up to run 25 samples. You can change this manually and then run `sbatch pathoscope_human.sh` or you can delete the line that says "#SBATCH --array=1-25" and run the following command.
 
@@ -16,7 +16,7 @@ sbatch -a 1-$(wc -l < ../samps.txt) ../scripts/pathoscope_human.sh
 
 ### **_Mapping to Bacteria_**
 You will need the [`pathoscope_bacteria.sh`](pathoscope_bacteria.sh) file.
-This file is set up to run 25 samples. You can change this manually and then run `sbatch pathoscope_human.sh` or you can delete the line that says "#SBATCH --array=1-25" and run the following command.
+This file is set up to run 12 samples. You can change this manually and then run `sbatch pathoscope_human.sh` or you can delete the line that says "#SBATCH --array=1-12" and run the following command.
 ```
 sbatch -a 1-$(wc -l < ../samps.txt) ../scripts/pathoscope_bacteria.sh
 ```
