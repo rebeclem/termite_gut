@@ -4,6 +4,19 @@ Navigate to where the files are stored: `cd /groups/cbi/Users/rclement/`
 copy files to lustre: `rsync -avh Rawdata/termite_shotgun/ /lustre/groups/cbi/Users/rclement/Rawdata`
 Navigate to Rawdata directory: `cd /lustre/groups/cbi/Users/rclement/Rawdata'
 
+## To make shorter files to practice with
+In the dada2 folder:
+First copy all of the ones that start with L81* to the dada2small folder and the MPL (control)
+```
+cp L81* dada2small/
+cp MPL_flexcleaned_* dada2small/
+```
+Then, add the suffix short to the filenames, and add only the first 12K lines to each of these files.
+```
+for f in *.fastq; do newname=${f%.fastq}_short.fastq; head -12000 $f > $newname; echo $newname; done
+```
+
+
 ### Creating a directory for each sample.
 For every file inside a folder that has a L001 and an R1, make an object samp that is the folder name. First the basename makes it so that you get rid of the outside folder. Then you take off the ending that matches -*-*.
 Print the folder name and then make a directory that is called the sample name with a designated prefix. Run this without the mkdir to make sure it's running right.
