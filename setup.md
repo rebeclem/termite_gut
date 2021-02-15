@@ -113,3 +113,6 @@ Your refs folder should now have ~60 files that end with .bt2
 You should also copy the scripts from here to your scripts folder
 ***
 Next Step: [Perform FastQC](fastqc.md)
+
+Or
+[Run R on cluster](r_HPC.md)
