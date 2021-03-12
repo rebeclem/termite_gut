@@ -13,9 +13,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Caroline, you can write something here:
 im typing 
+i also type a thing
 
 
-I'm typing something here. Becca is typing something here.
+I'm typing something here. another thing. Becca is typing something here.
+
 
 
 This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
