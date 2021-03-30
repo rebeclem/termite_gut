@@ -3,5 +3,9 @@
 .RData
 .Ruserdata
 Testfile.html
+<<<<<<< HEAD
 dada2_16S2_personal_computer.R
 creating_termite_meta2_p.R
+=======
+Map_making.html
+>>>>>>> f87db166fc1b3ed22d03a5be39ff4c1d6f9bbdef
