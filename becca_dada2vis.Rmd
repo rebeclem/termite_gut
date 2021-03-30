@@ -15,6 +15,7 @@ library(dada2)
 library(ggplot2)
 library(phyloseq)
 library(Biostrings)
+library(dplyr)
 ```
 Read in all the files that we need
 ```{r}
@@ -29,5 +30,72 @@ tax_silva2<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/
 # Read in metadata file
 term_meta<-read.csv("~/Box/Clement_TermiteGut_16S_0108/16S_metadata.csv")
 ```
+## 1) Subset our metadata files so that it's equal with the seqtab files.
+```{r}
+samples1.out<-rownames(seqtab)
+samples1_meta<-term_meta[term_meta$Termite_ID %in% samples1.out,]
+rownames(samples1_meta)<-samples1.out[1:56]
 
+samples2.out<-rownames(seqtab2)
+samples2_meta<-term_meta[term_meta$Termite_ID %in% samples2.out, ]
+rownames(samples2_meta)<-samples2.out[1:72]
+```
+
+## 2) Make phyloseq objects from seqtab, metadata and tax. Save these objects
+```{r}
+ps1<-phyloseq(otu_table(seqtab,taxa_are_rows = F),sample_data(samples1_meta),tax_table(tax_silva))
+
+ps2<-phyloseq(otu_table(seqtab2,taxa_are_rows = F),sample_data(samples2_meta),tax_table(tax_silva2)) # Can't run this yet. Wait until Caroline adds thing.
+
+#Store DNA names as dna to make more readable
+dna <- Biostrings::DNAStringSet(taxa_names(ps1))
+names(dna) <- taxa_names(ps1)
+ps1 <- merge_phyloseq(ps1, dna)
+taxa_names(ps1) <- paste0("ASV", seq(ntaxa(ps1)))
+ps1
+
+dna2 <- Biostrings::DNAStringSet(taxa_names(ps2))
+names(dna2) <- taxa_names(ps2)
+ps2 <- merge_phyloseq(ps2, dna2)
+taxa_names(ps2) <- paste0("ASV", seq(ntaxa(ps2)))
+ps2
+
+```
+
+## 3) Compare alpha diversity between samples
+```{r}
+plot_richness(ps1, x="Species", measures=c("Shannon", "Simpson"), color="Site")
+plot_richness(ps2, x="Seq_ID", measures=c("Shannon", "Simpson"), color="Site")
+```
+
+## 4) Compare beta diversity with ordination. NMDS.
+```{r}
+# Transform data to proportions as appropriate for Bray-Curtis distances
+ps1.prop <- transform_sample_counts(ps1, function(otu) otu/sum(otu))
+ord.nmds.bray <- ordinate(ps1.prop, method="NMDS", distance="bray")
+plot_ordination(ps1.prop, ord.nmds.bray, color="Species", title="Bray NMDS")
+
+```
+Same but for ps2
+```{r}
+ps2.prop <- transform_sample_counts(ps2, function(otu) otu/sum(otu))
+ord.nmds.bray2 <- ordinate(ps2.prop, method="NMDS", distance="bray")
+plot_ordination(ps2.prop, ord.nmds.bray2, color="Species", title="Bray NMDS")
+```
+
+## 5) Make a bar plot that shows the different samples.
+
+```{r}
+top20 <- names(sort(taxa_sums(ps1), decreasing=TRUE))[1:20]
+ps1.top20 <- transform_sample_counts(ps1, function(OTU) OTU/sum(OTU))
+ps1.top20 <- prune_taxa(top20, ps1.top20)
+plot_bar(ps1.top20, x="Species", fill="Genus") + facet_wrap(~Species, scales="free_x")
+```
+Same but for ps2
+```{r}
+top20_2 <- names(sort(taxa_sums(ps2), decreasing=TRUE))[1:20]
+ps2.top20 <- transform_sample_counts(ps2, function(OTU) OTU/sum(OTU))
+ps2.top20 <- prune_taxa(top20, ps2.top20)
+#plot_bar(ps2.top20, x="Species", fill="Genus") + facet_wrap(~Species, scales="free_x")
+```
 
