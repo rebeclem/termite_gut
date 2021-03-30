@@ -8,3 +8,26 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+Load libraries that we need
+```{r message=FALSE}
+library(dada2)
+library(ggplot2)
+library(phyloseq)
+library(Biostrings)
+```
+Read in all the files that we need
+```{r}
+#objects with 2 after are the second set of samples we sequenced. Seqtab files have columns as DNA seqs, rows as IDs. tax files should have DNA seqs as rows and kingdom phylum class ranks as columns. 
+seqtab<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/seqtab_final.rds")
+seqtab2<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/seqtab_final2.rds")
+tax<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/tax_final.rds") # Need to go back and fix this file. It is showing bad stuff.
+tax2<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/tax_final2.rds") # This one hasn't finished running yet. Caroline will upload to BOX when it does
+tax_silva<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/tax_silva.rds")
+tax_silva2<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/tax_silva2.rds")
+
+# Read in metadata file
+term_meta<-read.csv("~/Box/Clement_TermiteGut_16S_0108/16S_metadata.csv")
+```
+
+
