@@ -1,0 +1,25 @@
+---
+title: "Combined Dada2 Visualization"
+author: "Rebecca Clement"
+date: "4/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+I combined the two seqtab runs into one. Here is the analysis for that.
+
+Load libraries that we need
+```{r message=FALSE}
+library(dada2)
+library(ggplot2)
+library(phyloseq)
+library(Biostrings)
+library(dplyr)
+```
+
+```{r}
+seqtab<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/seqtab_both_final.rds")
+```
+
