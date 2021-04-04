@@ -20,6 +20,9 @@ library(dplyr)
 ```
 
 ```{r}
-seqtab<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/seqtab_both_final.rds")
+seqtab_all<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/seqtab_both_final.rds")
+tax_silva_all<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/tax_silva.rds")
+# Read in metadata file
+term_meta2<-read.csv("~/Box/Clement_TermiteGut_16S_0108/16S_metadata2.csv")
 ```
 
