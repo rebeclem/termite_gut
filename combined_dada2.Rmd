@@ -26,14 +26,55 @@ tax_dictdb_all<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfi
 # Read in metadata file
 term_meta2<-read.csv("~/Box/Clement_TermiteGut_16S_0108/16S_metadata2.csv")
 
-#add name to seqtab table and export as csv
+#add name to seqtab table and export as csv to use in microbiomeanalyst. Rows are OTUs. Samples are columns. Add #NAME to header row
+analyst_otu<-t(seqtab_all)
+analyst_otu<-rbind(colnames(analyst_otu),analyst_otu)
+analyst_otu<-cbind(rownames(analyst_otu),analyst_otu)
+analyst_otu[1,1]<-"#NAME"
+
+write.csv(analyst_otu,"~/Box/Clement_TermiteGut_16S_0108/MicrobiomeAnalyst/combined_otu.csv",row.names = FALSE, col.names=FALSE)
+
 
 ```
+```{r}
+
+```
+
 ## 1) Subset our metadata files so that it's equal with the seqtab files.
 ```{r}
 samples_all.out <- rownames(seqtab_all)
 samples_all_meta <- term_meta2[term_meta2$Termite_ID %in% samples_all.out,]
 rownames(samples_all_meta) <- samples_all_meta$Termite_ID
+```
+Look at mock communities
+```{r}
+# Evaluate accuracy on the mock community if sequenced in MiSeq run
+```{r}
+# mock communities: "BEC0057","flexcleaned","Zymo"
+unqs.mock <- seqtab_all["Zymo",]
+unqs.mock <- sort(unqs.mock[unqs.mock>0], decreasing=TRUE) # Drop ASVs absent in the Mock
+cat("DADA2 inferred", length(unqs.mock), "sample sequences present in the Mock community.\n") #92 sample sequences
+unqs.mock2 <- seqtab_all["flexcleaned",]
+unqs.mock2 <- sort(unqs.mock2[unqs.mock2>0], decreasing=TRUE) # Drop ASVs absent in the Mock
+cat("DADA2 inferred", length(unqs.mock2), "sample sequences present in the Mock community.\n") #70 sample sequences
+unqs.mock3 <- seqtab_all["BEC0057",]
+unqs.mock3 <- sort(unqs.mock3[unqs.mock3>0], decreasing=TRUE) # Drop ASVs absent in the Mock
+cat("DADA2 inferred", length(unqs.mock3), "sample sequences present in the Mock community.\n") #71 sample sequences
+unqs.mock4 <- seqtab_all[c("BEC0057","flexcleaned","Zymo"),]
+unqs.mock4 <- sort(unqs.mock4[unqs.mock4>0], decreasing=TRUE) # Drop ASVs absent in the Mock
+cat("DADA2 inferred", length(unqs.mock4), "sample sequences present in the Mock community.\n") #233 sample sequences
+write.csv(as.data.frame(unqs.mock),"~/Box/Clement_TermiteGut_16S_0108/Mock/mock_otu_zymo.csv")
+write.csv(as.data.frame(unqs.mock2),"~/Box/Clement_TermiteGut_16S_0108/Mock/mock_otu_flex.csv")
+write.csv(as.data.frame(unqs.mock3),"~/Box/Clement_TermiteGut_16S_0108/Mock/mock_otu_BEC0057.csv")
+
+
+
+mock.ref <- getSequences(file.path(path, "HMP_MOCK.v35.fasta"))
+match.ref <- sum(sapply(names(unqs.mock), function(x) any(grepl(x, mock.ref))))
+cat("Of those,", sum(match.ref), "were exact matches to the expected reference sequences.\n")
+
+# Conclusion: This mock community contained 20 bacterial strains. DADA2 identified 20 ASVs all of which exactly match the reference genomes of the expected community members. 
+
 ```
 
 ## 2) Make phyloseq objects from seqtab, metadata and tax. Save these objects.
