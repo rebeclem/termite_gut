@@ -22,12 +22,97 @@ Read in all the files that we need
 seqtab<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/seqtab_final.rds")
 seqtab2<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/seqtab_final2.rds")
 tax<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/tax_final.rds") # Need to go back and fix this file. It is showing bad stuff.
-tax2<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/tax_final2.rds") # This one hasn't finished running yet. Caroline will upload to BOX when it does
+tax2<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles") # This one hasn't finished running yet. Caroline will upload to BOX when it does
 tax_silva<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/tax_silva.rds")
 tax_silva2<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/tax_silva2.rds")
 
 # Read in metadata file
-term_meta<-read.csv("~/Box/Clement_TermiteGut_16S_0108/16S_metadata.csv")
+termite_meta<-read.csv("~/Box/Clement_TermiteGut_16S_0108/16S_metadata2.csv")
 ```
+
+## 1) Subset our metadata files so that it's equal with the seqtab files.
+```{r}
+samples1.out <- rownames(seqtab)
+samples1_meta <- termite_meta[termite_meta$Termite_ID %in% samples1.out,]
+rownames(samples1_meta) <- samples1.out[1:56]
+
+samples2.out <- rownames(seqtab2)
+samples2_meta <- termite_meta[termite_meta$Termite_ID %in% samples2.out,]
+rownames(samples2_meta) <- samples2.out[1:72]
+```
+
+## 2) Make phyloseq objects from seqtab, metadata and tax. Save these objects.
+```{r}
+ps1 <- phyloseq(otu_table(seqtab, taxa_are_rows=FALSE), 
+               sample_data(samples1_meta), 
+               tax_table(tax_silva))
+ps2 <- phyloseq(otu_table(seqtab2, taxa_are_rows=FALSE), 
+               sample_data(samples2_meta), 
+               tax_table(tax_silva2))
+
+dna1 <- Biostrings::DNAStringSet(taxa_names(ps1))
+names(dna1) <- taxa_names(ps1)
+ps1 <- merge_phyloseq(ps1, dna1)
+taxa_names(ps1) <- paste0("ASV", seq(ntaxa(ps1)))
+ps1
+
+dna2 <- Biostrings::DNAStringSet(taxa_names(ps2))
+names(dna2) <- taxa_names(ps2)
+ps2 <- merge_phyloseq(ps2, dna2)
+taxa_names(ps2) <- paste0("ASV", seq(ntaxa(ps2)))
+ps2
+```
+
+## 3) Compare alpha diversity between samples.
+```{r}
+plot_richness(ps1, x="Species", measures=c("Shannon", "Simpson"), color="Site")
+
+plot_richness(ps2, x="Species", measures=c("Shannon", "Simpson"), color="Site")
+```
+
+## 4) Compare beta diversity with ordination. (ex. NMDS)
+```{r}
+# Transform data to proportions as appropriate for Bray-Curtis distances
+ps.prop1 <- transform_sample_counts(ps1, function(otu) otu/sum(otu))
+ord.nmds.bray1 <- ordinate(ps.prop1, method="NMDS", distance="bray")
+
+ps.prop2 <- transform_sample_counts(ps2, function(otu) otu/sum(otu))
+ord.nmds.bray2 <- ordinate(ps.prop2, method="NMDS", distance="bray")
+```
+```{r}
+plot_ordination(ps.prop1, ord.nmds.bray1, color="Species", title="Bray NMDS")
+
+plot_ordination(ps.prop2, ord.nmds.bray2, color="Species", title="Bray NMDS")
+```
+```{r}
+plot_ordination(ps.prop1, ord.nmds.bray1, color="Site", title="Bray NMDS")
+
+plot_ordination(ps.prop2, ord.nmds.bray2, color="Site", title="Bray NMDS")
+```
+```{r}
+plot_ordination(ps.prop1, ord.nmds.bray1, color="Cluster", title="Bray NMDS")
+
+plot_ordination(ps.prop2, ord.nmds.bray2, color="Cluster", title="Bray NMDS")
+```
+
+```{r}
+plot_ordination(ps.prop1, ord.nmds.bray1, color="Habitat", title="Bray NMDS")
+
+plot_ordination(ps.prop2, ord.nmds.bray2, color="Habitat", title="Bray NMDS")
+```
+
+## 5) Make a bar plot that shows the different samples. 
+```{r}
+top20_1 <- names(sort(taxa_sums(ps1), decreasing=TRUE))[1:20]
+ps.top20_1 <- transform_sample_counts(ps1, function(OTU) OTU/sum(OTU))
+ps.top20_1 <- prune_taxa(top20_1, ps.top20_1)
+plot_bar(ps.top20_1, x="Species", fill="Family") + facet_wrap(~Species, scales="free_x")
+
+top20_2 <- names(sort(taxa_sums(ps2), decreasing=TRUE))[1:20]
+ps.top20_2 <- transform_sample_counts(ps2, function(OTU) OTU/sum(OTU))
+ps.top20_2 <- prune_taxa(top20_2, ps.top20_2)
+plot_bar(ps.top20_2, x="Species", fill="Family") + facet_wrap(~Species, scales="free_x")
+```
+
 
 

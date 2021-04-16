@@ -22,8 +22,12 @@ library(dplyr)
 ```{r}
 seqtab_all<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/seqtab_both_final.rds")
 tax_silva_all<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/tax_silva.rds")
+tax_dictdb_all<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/tax_all_dictdb.rds")
 # Read in metadata file
 term_meta2<-read.csv("~/Box/Clement_TermiteGut_16S_0108/16S_metadata2.csv")
+
+#add name to seqtab table and export as csv
+
 ```
 ## 1) Subset our metadata files so that it's equal with the seqtab files.
 ```{r}
@@ -45,8 +49,11 @@ names(dna_all) <- taxa_names(ps_all)
 ps_all <- merge_phyloseq(ps_all, dna_all)
 taxa_names(ps_all) <- paste0("ASV", seq(ntaxa(ps_all)))
 ps_all
+rowSums(otu_table(ps_all))
 #write csv of OTU table
-write.csv(otu_table(ps_all),"termite_combined_otu.csv") # something seems very wrong with this data
+write.csv(t(otu_table(ps_all)),"termite_combined_otu.csv") # something seems very wrong with this data
+#write taxonomy table
+write.csv(tax_table(ps_all),"silva_taxtable.csv")
 ```
 
 ## 3) Compare alpha diversity between samples.
