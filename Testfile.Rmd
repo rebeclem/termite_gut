@@ -27,6 +27,7 @@ When you click the **Knit** button a document will be generated that includes bo
 ```{r cars}
 summary(cars)
 ```
+I'm going to add a portion here. Does this look good?
 
 ## Including Plots
 
