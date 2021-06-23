@@ -8,7 +8,12 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-I combined the two seqtab runs into one. Here is the analysis for that.
+I combined the two seqtab runs into one. Here is the analysis for that. Actually the combining may not have worked. Let's try recombining them
+```{r}
+dim(seqtab) #58x63820
+dim(seqtab2) #73x47152
+dim(seqtab_all) #131x76196 , the sum of the two above is 110972. This means there is more to go.
+```
 
 Load libraries that we need
 ```{r message=FALSE}
@@ -20,20 +25,49 @@ library(dplyr)
 ```
 
 ```{r}
-seqtab_all<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/seqtab_both_final.rds")
-tax_silva_all<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/tax_silva.rds")
-tax_dictdb_all<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/outfiles/tax_all_dictdb.rds")
+seqtab_all<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/trimmed_outfiles/seqtab_all.rds")
+tax_silva_all<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/trimmed_outfiles/tax_all_silva.rds")
+tax_dictdb_all<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/trimmed_outfiles/tax_all_dictdb.rds")
 # Read in metadata file
 term_meta2<-read.csv("~/Box/Clement_TermiteGut_16S_0108/16S_metadata2.csv")
+```
+Run assign taxonomy. Note: We did this already on the Mac in the glass classroom, so we can skip this step here.
+```{r}
+#tax_dictdb_new_all<-assignTaxonomy(seqtab_all,"~/Box/Clement_TermiteGut_16S_0108/refs/DictDb_names.fasta",taxLevels = c("Phylum","Class","Order","Family","Genus","Species"))
+```
 
+Prep for microbiome analyst
+```{r}
 #add name to seqtab table and export as csv to use in microbiomeanalyst. Rows are OTUs. Samples are columns. Add #NAME to header row
+analyst_otu<-as.data.frame(seqtab_all)
 analyst_otu<-t(seqtab_all)
-analyst_otu<-rbind(colnames(analyst_otu),analyst_otu)
-analyst_otu<-cbind(rownames(analyst_otu),analyst_otu)
-analyst_otu[1,1]<-"#NAME"
+#analyst_otu<-rbind(colnames(analyst_otu),analyst_otu)
+analyst_otu_new<-cbind(rownames(analyst_otu),analyst_otu)
+colnames(analyst_otu_new)[1]<-"#NAME"
+colnames(analyst_otu_new)
+#analyst_otu[1,1]<-"#NAME"
 
-write.csv(analyst_otu,"~/Box/Clement_TermiteGut_16S_0108/MicrobiomeAnalyst/combined_otu.csv",row.names = FALSE, col.names=FALSE)
+#Put this file into both the folders
+write.table(analyst_otu_new,"~/Box/Clement_TermiteGut_16S_0108/MicrobiomeAnalyst/DictDB_2/combined_otu.csv",sep=",",row.names = FALSE, col.names=T)
+write.table(analyst_otu_new,"~/Box/Clement_TermiteGut_16S_0108/MicrobiomeAnalyst/Silva_2/combined_otu.csv",sep=",",row.names = FALSE, col.names=T)
 
+# make metadata column name #NAME
+analyst_meta<-term_meta2 %>% rename("#NAME" = "Termite_ID")
+write.table(analyst_meta,"~/Box/Clement_TermiteGut_16S_0108/MicrobiomeAnalyst/meta.csv",sep=",",row.names=F)
+
+
+# make taxonomy table A1 #TAXONOMY
+analyst_tax<-as.data.frame(tax_silva_all) #dimensions: 74755x7
+analyst_tax_new<-cbind(rownames(analyst_tax),analyst_tax)
+colnames(analyst_tax_new)[1]<-"#TAXONOMY"
+write.table(analyst_tax_new,"~/Box/Clement_TermiteGut_16S_0108/MicrobiomeAnalyst/Silva_2/combined_silva_tax.csv",sep=",",row.names=F)
+
+analyst_tax_dictdb<-as.data.frame(tax_dictdb_all)
+analyst_tax_dictdb_new<-cbind(rownames(analyst_tax_dictdb),analyst_tax_dictdb)
+colnames(analyst_tax_dictdb_new)[1]<-"#TAXONOMY"
+write.table(analyst_tax_dictdb_new,"~/Box/Clement_TermiteGut_16S_0108/MicrobiomeAnalyst/DictDB_2/combined_dictdb_tax.csv",sep=",",row.names=F)
+
+#Compress the OTU files to a zip file before uploading.
 
 ```
 ```{r}
