@@ -3,6 +3,8 @@ title: "Combined Dada2 Visualization"
 author: "Rebecca Clement"
 date: "4/2/2021"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -22,9 +24,15 @@ library(ggplot2)
 library(phyloseq)
 library(Biostrings)
 library(dplyr)
+#devtools::install_github("leffj/mctoolsr")
+library(mctoolsr)
+library(seqinr)
+library(microbiome)
+
 ```
 
 ```{r}
+
 seqtab_all<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/trimmed_outfiles/seqtab_all.rds")
 tax_silva_all<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/trimmed_outfiles/tax_all_silva.rds")
 tax_dictdb_all<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/trimmed_outfiles/tax_all_dictdb.rds")
@@ -32,7 +40,7 @@ tax_dictdb_all<-readRDS("~/Box/Clement_TermiteGut_16S_0108/Dada2_rds_files/trimm
 term_meta2<-read.csv("~/Box/Clement_TermiteGut_16S_0108/16S_metadata2.csv")
 ```
 Run assign taxonomy. Note: We did this already on the Mac in the glass classroom, so we can skip this step here.
-```{r}
+```{r eval=FALSE, include=FALSE}
 #tax_dictdb_new_all<-assignTaxonomy(seqtab_all,"~/Box/Clement_TermiteGut_16S_0108/refs/DictDb_names.fasta",taxLevels = c("Phylum","Class","Order","Family","Genus","Species"))
 ```
 
@@ -70,42 +78,47 @@ write.table(analyst_tax_dictdb_new,"~/Box/Clement_TermiteGut_16S_0108/Microbiome
 #Compress the OTU files to a zip file before uploading.
 
 ```
-```{r}
 
-```
 
 ## 1) Subset our metadata files so that it's equal with the seqtab files.
 ```{r}
 samples_all.out <- rownames(seqtab_all)
-samples_all_meta <- term_meta2[term_meta2$Termite_ID %in% samples_all.out,]
-rownames(samples_all_meta) <- samples_all_meta$Termite_ID
+samples_all_meta <- term_meta2[term_meta2$X.NAME %in% samples_all.out,]
+rownames(samples_all_meta) <- samples_all_meta$X.NAME
+dim(samples_all_meta) #128x11
 ```
 Look at mock communities
 ```{r}
 # Evaluate accuracy on the mock community if sequenced in MiSeq run
-```{r}
+
 # mock communities: "BEC0057","flexcleaned","Zymo"
 unqs.mock <- seqtab_all["Zymo",]
 unqs.mock <- sort(unqs.mock[unqs.mock>0], decreasing=TRUE) # Drop ASVs absent in the Mock
-cat("DADA2 inferred", length(unqs.mock), "sample sequences present in the Mock community.\n") #92 sample sequences
+cat("DADA2 inferred", length(unqs.mock), "sample sequences present in the zymo ock community.\n") #DADA2 inferred 94 sample sequences present in the Mock community.
 unqs.mock2 <- seqtab_all["flexcleaned",]
 unqs.mock2 <- sort(unqs.mock2[unqs.mock2>0], decreasing=TRUE) # Drop ASVs absent in the Mock
-cat("DADA2 inferred", length(unqs.mock2), "sample sequences present in the Mock community.\n") #70 sample sequences
+cat("DADA2 inferred", length(unqs.mock2), "sample sequences present in the Mock community.\n") #DADA2 inferred 72 sample sequences present in the Mock community
 unqs.mock3 <- seqtab_all["BEC0057",]
 unqs.mock3 <- sort(unqs.mock3[unqs.mock3>0], decreasing=TRUE) # Drop ASVs absent in the Mock
-cat("DADA2 inferred", length(unqs.mock3), "sample sequences present in the Mock community.\n") #71 sample sequences
-unqs.mock4 <- seqtab_all[c("BEC0057","flexcleaned","Zymo"),]
-unqs.mock4 <- sort(unqs.mock4[unqs.mock4>0], decreasing=TRUE) # Drop ASVs absent in the Mock
+cat("DADA2 inferred", length(unqs.mock3), "sample sequences present in the Mock community.\n") #DADA2 inferred 73 sample sequences present in the Mock community.
+#unqs.mock4 <- rbind(unqs.mock,unqs.mock2,unqs.mock3)
+#unqs.mock4 <- sort(unqs.mock4[unqs.mock4>0], decreasing=TRUE) # Drop ASVs absent in the Mock
 cat("DADA2 inferred", length(unqs.mock4), "sample sequences present in the Mock community.\n") #233 sample sequences
 write.csv(as.data.frame(unqs.mock),"~/Box/Clement_TermiteGut_16S_0108/Mock/mock_otu_zymo.csv")
 write.csv(as.data.frame(unqs.mock2),"~/Box/Clement_TermiteGut_16S_0108/Mock/mock_otu_flex.csv")
 write.csv(as.data.frame(unqs.mock3),"~/Box/Clement_TermiteGut_16S_0108/Mock/mock_otu_BEC0057.csv")
-
-
-
-mock.ref <- getSequences(file.path(path, "HMP_MOCK.v35.fasta"))
+```
+I downloaded the zymo mock communities from https://s3.amazonaws.com/zymo-files/BioPool/ZymoBIOMICS.STD.refseq.v2.zip, put them into a single fasta file using geneious, and loaded it here.
+```{r}
+mock.ref <- getSequences(file.path("~/Box/Clement_TermiteGut_16S_0108/refs/16S_zymo_all.fasta"))
 match.ref <- sum(sapply(names(unqs.mock), function(x) any(grepl(x, mock.ref))))
-cat("Of those,", sum(match.ref), "were exact matches to the expected reference sequences.\n")
+cat("Of those,", sum(match.ref), "were exact matches to the expected reference sequences of Zymo.\n") #4?
+match.ref2 <- sum(sapply(names(unqs.mock2), function(x) any(grepl(x, mock.ref))))
+cat("Of those,", sum(match.ref2), "were exact matches to the expected reference sequences of flexcleaned.\n") #0?
+match.ref3 <- sum(sapply(names(unqs.mock3), function(x) any(grepl(x, mock.ref))))
+cat("Of those,", sum(match.ref3), "were exact matches to the expected reference sequences of BEC057.\n") #1
+#match.ref4 <- sum(sapply(names(unqs.mock4), function(x) any(grepl(x, mock.ref))))
+#cat("Of those,", sum(match.ref4), "were exact matches to the expected reference sequences of all.\n")
 
 # Conclusion: This mock community contained 20 bacterial strains. DADA2 identified 20 ASVs all of which exactly match the reference genomes of the expected community members. 
 
@@ -113,28 +126,125 @@ cat("Of those,", sum(match.ref), "were exact matches to the expected reference s
 
 ## 2) Make phyloseq objects from seqtab, metadata and tax. Save these objects.
 ```{r}
-ps_all <- phyloseq(otu_table(seqtab_all, taxa_are_rows=FALSE), 
-               sample_data(samples_all_meta), 
-               tax_table(tax_silva_all))
+tax_silva_all[is.na(tax_silva_all)] <- "unclassified"  # change NA to unclasssified
+sort(unique(tax_silva_all[,1]))
+# Get rid of Chloroplast and mitochondria
+taxa2<-data.frame(tax_silva_all) ## convert to data.frame
+taxa2<-subset(taxa2, Order!="Chloroplast" & Family!="Mitochondria")  # I keep bacteria and eliminate chloroplasts and mitochondria
 
 
+
+#ps_all <- phyloseq(otu_table(seqtab_all, taxa_are_rows=FALSE), 
+               #sample_data(samples_all_meta), 
+               #tax_table(taxa2))
+
+b<-t(seqtab_all)
+ASVsfiltered<-b[rownames(taxa2)]
+seqtab.nochim<-t(ASVsfiltered);rm(b);rm(ASVsfiltered)
+
+# change long names in reads to amplicon single variants (ASV)
+seqtab.nochim1 <- seqtab.nochim
+colnames(seqtab.nochim1) <- paste0("ASV", 1:ncol(seqtab.nochim1))
+taxa3 <- taxa2
+rownames(taxa3) <- paste0("ASV", 1:nrow(taxa3))
+write.table(taxa3,"~/Box/Clement_TermiteGut_16S_0108/output/dada2_test_conc_taxonomy.txt",quote=F,sep="\t")
+
+## export tables with ASVs
+# run function
+export_taxa_table_and_seqs = function(seqtab.nochim, file_seqtab, file_seqs) {
+  seqtab.t = as.data.frame(t(seqtab.nochim))
+  seqs = row.names(seqtab.t)
+  row.names(seqtab.t) = paste0("ASV", 1:nrow(seqtab.t))
+  outlist = list(data_loaded = seqtab.t)
+  mctoolsr::export_taxa_table(outlist, file_seqtab)
+  seqs = as.list(seqs)
+  seqinr::write.fasta(seqs, row.names(seqtab.t), file_seqs)
+}
+
+export_taxa_table_and_seqs(seqtab_all,"ASV_table_test_conc.txt","ASV_seqs_test_conc.fa")
+
+tree <- read_tree("~/Box/Clement_TermiteGut_16S_0108/pegasus/tree2.treefile")
+taxa1 <- read.delim("~/Box/Clement_TermiteGut_16S_0108/output/dada2_test_conc_taxonomy.txt")
+otu <- read.delim("ASV_table_test_conc.txt", skip = 1, row.names = 1, check.names = FALSE)
+metadata <- samples_all_meta
+#Change names to be less ambiguous with taxonomy
+colnames(metadata)[c(4,10)]<-c("t_sp","t_fam")
+ps <- phyloseq(tax_table(as.matrix(taxa1)), phy_tree(tree), sample_data(metadata), otu_table(otu, taxa_are_rows = TRUE))
+ps1 <- ps
 # Make the names ASV instead of DNA
-dna_all <- Biostrings::DNAStringSet(taxa_names(ps_all))
-names(dna_all) <- taxa_names(ps_all)
-ps_all <- merge_phyloseq(ps_all, dna_all)
-taxa_names(ps_all) <- paste0("ASV", seq(ntaxa(ps_all)))
-ps_all
-rowSums(otu_table(ps_all))
+#dna_all <- Biostrings::DNAStringSet(taxa_names(ps_all))
+#names(dna_all) <- taxa_names(ps_all)
+#ps_all <- merge_phyloseq(ps_all, dna_all)
+#taxa_names(ps_all) <- paste0("ASV", seq(ntaxa(ps_all)))
+#ps_all #73K taxa, 128 samples
+#rowSums(otu_table(ps_all))
+#mean(rowSums(otu_table(ps_all))) #148591.5 reads/sample
 #write csv of OTU table
-write.csv(t(otu_table(ps_all)),"termite_combined_otu.csv") # something seems very wrong with this data
+#write.csv(t(otu_table(ps_all)),"termite_combined_otu.csv") # something seems very wrong with this data
 #write taxonomy table
-write.csv(tax_table(ps_all),"silva_taxtable.csv")
+#write.csv(tax_table(ps_all),"silva_taxtable.csv")
 ```
+2.5 Summarize taxa through plots
+```{r}
+theme_set(theme_bw())
+#remove extra taxonomic ranks
+# remove ASVs whose mean value per sample is less than 1
+ps3 <- filter_taxa(ps1, function(x) mean(x) > 1, TRUE)
+nrow(ps1@otu_table) #73712
+nrow(ps3@otu_table) #25304
+
+# fiter singletons
+ps4 <- prune_taxa(taxa_sums(ps3) > 1, ps3) 
+nrow(ps4@otu_table) #25304, no change from previous
+# filter samples with less than 1000 reads
+ps5 = prune_samples(sample_sums(ps4) >= 1000, ps4)
+nrow(ps5@otu_table) #25304
+summarize_phyloseq(ps5) #tells min, max, average, median #singletons etc.
+
+#Export table of ASVs
+table_otu<-otu_table(ps5)
+write.csv(table_otu,file="silva_table_ps5_test_conc.csv")
+
+#Export taxonomy of ASVs
+table_tax<-tax_table(ps5)
+write.csv(table_tax,file="silva_tax_ps5_test_conc.csv")
+
+# Export table of ASVs with taxonomy
+table_all<-cbind(tax_table(ps5),otu_table(ps5))
+write.csv(table_all,file="table_tax_ps5.csv")
+```
+2.75 make plots
+Skip this section. Takes too long.
+```{r}
+plot1<-plot_bar(ps5,x="t_sp",fill="Order",facet_grid=~Habitat)
+plot1
+p1<-plot1
+plot2<-plot_bar(ps5, x="Species", fill="Family")
+plot2
+plot3<-plot_bar(ps5, "Order", fill="Family", facet_grid=~Species)
+plot3
+ggsave(plot1,"plot1")
+
+# Pathoscope Kingdom-level assignments chart
+ps.byking <- tax_glom(ps5,taxrank = 'Kingdom') #combine all taxa into kingdom-level groups
+ps.byking.tr <- transform_sample_counts(ps.byking, function (x) x / sum(x)) #transform abundances into relative abundances
+#patho.byking.tr.f <- filter_taxa(patho.byking.tr, function (x) max(x) > 1e-2, TRUE) #filter out phyla with < 1% relative abundance.
+
+ps.by_king_plot <- plot_bar(ps.byking, "Sample", "Abundance", 'superkingdom', labs(y="Relative Abundance", title = "Kingdom-level assignments"))
+ps.by_king_plot <- ps.by_king_plot + 
+  theme_classic() + 
+  facet_grid( ~ Species, scales = "free", space = "free")  + 
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5, hjust=0))
+ps.by_king_plot
+ggsave("plots/PS.by_kingdom.pdf", patho.by_king_plot) 
+```
+
 
 ## 3) Compare alpha diversity between samples.
 ```{r}
-plot_richness(ps_all, x="Species", measures=c("Shannon", "Simpson"), color="Site")
-
+rich_site<-plot_richness(ps5, x="t_sp", measures=c("Shannon", "Simpson"), color="Site")
+rich_site
+ggsave("~/Box/Clement_TermiteGut_16S_0108/Figures/richness.png",rich_site)
 ```
 
 ## 4) Compare beta diversity with ordination. (ex. NMDS)
@@ -165,14 +275,46 @@ plot_ordination(ps.prop2, ord.nmds.bray2, color="Habitat", title="Bray NMDS")
 
 ## 5) Make a bar plot that shows the different samples. 
 ```{r}
-top20_1 <- names(sort(taxa_sums(ps1), decreasing=TRUE))[1:20]
-ps.top20_1 <- transform_sample_counts(ps1, function(OTU) OTU/sum(OTU))
+top20_1 <- names(sort(taxa_sums(ps5), decreasing=TRUE))[1:20]
+ps.top20_1 <- transform_sample_counts(ps5, function(OTU) OTU/sum(OTU))
 ps.top20_1 <- prune_taxa(top20_1, ps.top20_1)
-plot_bar(ps.top20_1, x="Species", fill="Family") + facet_wrap(~Species, scales="free_x")
+plot_bar(ps.top20_1, x="t_sp", fill="Genus") + facet_wrap(~t_sp, scales="free_x")
 
-top20_2 <- names(sort(taxa_sums(ps2), decreasing=TRUE))[1:20]
-ps.top20_2 <- transform_sample_counts(ps2, function(OTU) OTU/sum(OTU))
+top20_2 <- names(sort(taxa_sums(ps5), decreasing=TRUE))[1:20]
+ps.top20_2 <- transform_sample_counts(ps5, function(OTU) OTU/sum(OTU))
 ps.top20_2 <- prune_taxa(top20_2, ps.top20_2)
-plot_bar(ps.top20_2, x="Species", fill="Family") + facet_wrap(~Species, scales="free_x")
+plot_bar(ps.top20_2, x="t_sp", fill="Family") + facet_wrap(~t_sp, scales="free_x")
+```
+
+Run code from dada2_marcos.R
+Data normalization
+This will use a negative binomial distribution
+```{r}
+diagdds = phyloseq_to_deseq2(ps5, ~t_sp) # make a deseq object
+# Calculate geometric means
+gm_mean = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+geoMeans = apply(counts(diagdds), 1, gm_mean)
+# Estimate size factors
+diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
+# Get Normalized read counts
+normcounts <- counts(diagdds, normalized = TRUE)
+# Round read counts
+round(normcounts, digits = 0) -> normcountsrd
+# Transform matrix of normalized counts to phyloseq object
+otu_table(normcountsrd, taxa_are_rows = TRUE) -> ncr
+# Replace otu_table in original phyloseq object
+ps6<-ps5
+otu_table(ps6) <- ncr
+write.csv(ncr,file="deseq_file_normalized.csv")
+```
+
+Analysis of all samples
+```{r}
+otuD<-as.data.frame(t(otu_table(ps6)))
+phylodiversityRAREF_Q<-pd(otuD, phy_tree(ps6), include.root=TRUE) ### phyilogenetic diversity. Include root =True tree rooted via midpoint
+diversityRAREF_Q<-estimate_richness(datos)
+diversityRAREF_Q1<-cbind(sample_data(datos),diversityRAREF_Q,phylodiversityRAREF_Q) 
 ```
 

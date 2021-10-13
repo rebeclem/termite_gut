@@ -65,11 +65,11 @@ myMap <- get_stamenmap(bbox = c(left=144.85,
 cols <- c("#F6A924","#F6A924","#969A2E","Dark Green","Dark Green")#,"Red","Red","Red")
 #change order of legend
 levels(Sites$Habitat)
-Sites$Habitat<-factor(Sites$Habitat,levels=c("Savanna", "Intermediate", "Rainforest"))
+Sites$Habitat<-factor(Sites$Habitat,levels=c("Savanna", "Sclerophyll", "Rainforest"))
 # plot map
 mapwbase<-ggmap(myMap) +geom_point(data=Sites, aes(x=lon, y=lat,fill = Habitat), shape = 23,size=10) + #c(7,7,7,7,7))+#,3.5,3.5,3.5))+ #,fill=cols
   #scale_fill_manual(values = cols) +
- geom_text(data = Sites, aes(x=lon+0.01, y=lat, label = c("Pennyweight (PW) \n","\nStation Creek (SC)","  Mt. Lewis (MS)","JCU","  Rainforest\nRescue (RR)")),size = 12,hjust = "left",fontface = "bold") + 
+ geom_text(data = Sites, aes(x=lon+0.01, y=lat, label = c("Pennyweight (Sav1) \n","\nStation Creek (Sav2)","  Mt. Lewis (Scl1)","JCU","  Rainforest\nRescue (RR)")),size = 12,hjust = "left",fontface = "bold") + 
   #geom_text(data = Sites, aes(x=lon+0.01, y=lat, label = c("","","","","","W1","W2","W3\n")),color='red',size = 5,hjust = "left") +
  labs(x="Longitude", y="Latitude") +
  theme_classic()  +
@@ -82,7 +82,8 @@ mapwbase<-ggmap(myMap) +geom_point(data=Sites, aes(x=lon, y=lat,fill = Habitat),
   theme(
   legend.title = element_text( size = 20),
   legend.text = element_text( size = 18)
-  )
+  )+ theme(legend.position = c(0.2, 0.8))
+
 mapwbase
 
 # make a png file (you have to do this outside of rmd)
