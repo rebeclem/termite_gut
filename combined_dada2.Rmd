@@ -16,7 +16,7 @@ dim(seqtab) #58x63820
 dim(seqtab2) #73x47152
 dim(seqtab_all) #131x76196 , the sum of the two above is 110972. This means there is more to go.
 ```
-
+adding a line. 
 Load libraries that we need
 ```{r message=FALSE}
 library(dada2)
@@ -28,6 +28,9 @@ library(dplyr)
 library(mctoolsr)
 library(seqinr)
 library(microbiome)
+library(picante)
+library(lme4) #for glms
+library(vegan) #for comparing betadiversity
 
 ```
 
@@ -163,7 +166,7 @@ export_taxa_table_and_seqs = function(seqtab.nochim, file_seqtab, file_seqs) {
 
 export_taxa_table_and_seqs(seqtab_all,"ASV_table_test_conc.txt","ASV_seqs_test_conc.fa")
 
-tree <- read_tree("~/Box/Clement_TermiteGut_16S_0108/pegasus/tree2.treefile")
+tree <- read_tree("~/Box/Clement_TermiteGut_16S_0108/IQTree/microbetree2/microbe_tree_oct2021_rooted")
 taxa1 <- read.delim("~/Box/Clement_TermiteGut_16S_0108/output/dada2_test_conc_taxonomy.txt")
 otu <- read.delim("ASV_table_test_conc.txt", skip = 1, row.names = 1, check.names = FALSE)
 metadata <- samples_all_meta
@@ -230,61 +233,30 @@ ps.byking <- tax_glom(ps5,taxrank = 'Kingdom') #combine all taxa into kingdom-le
 ps.byking.tr <- transform_sample_counts(ps.byking, function (x) x / sum(x)) #transform abundances into relative abundances
 #patho.byking.tr.f <- filter_taxa(patho.byking.tr, function (x) max(x) > 1e-2, TRUE) #filter out phyla with < 1% relative abundance.
 
-ps.by_king_plot <- plot_bar(ps.byking, "Sample", "Abundance", 'superkingdom', labs(y="Relative Abundance", title = "Kingdom-level assignments"))
-ps.by_king_plot <- ps.by_king_plot + 
-  theme_classic() + 
-  facet_grid( ~ Species, scales = "free", space = "free")  + 
-  theme(axis.text.x = element_text(angle = 90, vjust=0.5, hjust=0))
-ps.by_king_plot
-ggsave("plots/PS.by_kingdom.pdf", patho.by_king_plot) 
 ```
+Reorder variables
+```{r}
+# Change factor levels to be in different order
+ps5@sam_data$t_sp1 <- ps5@sam_data$t_sp
+levels(ps5@sam_data$t_sp1)<-c('Amitermes','Coptotermes','Microcerotermes','Nasutitermes')
+ps5@sam_data$t_sp1<-factor(ps5@sam_data$t_sp1, levels=c('Amitermes','Microcerotermes','Nasutitermes','Coptotermes'))
 
+# Change sites to be driest to wettest
+ps5@sam_data$Site1<-ps5@sam_data$Site
+levels(ps5@sam_data$Site1)<- c('JCU rainforest','Sclerophyll','Dry savanna','Restored rainforest','Wet savanna')
+ps5@sam_data$Site1<-factor(ps5@sam_data$Site1,levels=c('Dry savanna','Wet savanna','Sclerophyll','JCU rainforest','Restored rainforest'))
+```
 
 ## 3) Compare alpha diversity between samples.
 ```{r}
-rich_site<-plot_richness(ps5, x="t_sp", measures=c("Shannon", "Simpson"), color="Site")
+# change legend name
+colnames(ps5@sam_data$Site1)  <- "Collection site"
+rich_site<-plot_richness(ps5, x="Collection site", measures=c("Shannon"), color="Collection site")+facet_wrap(~t_sp1, scales="free_x")+theme_bw()+ theme(axis.text.x = element_blank())+ scale_color_brewer(palette="Dark2")+xlab('Site')+ylab('Shannon Diversity')
 rich_site
-ggsave("~/Box/Clement_TermiteGut_16S_0108/Figures/richness.png",rich_site)
+
+ggsave("~/Box/Clement_TermiteGut_16S_0108/Figures/richness2.png",rich_site)
 ```
 
-## 4) Compare beta diversity with ordination. (ex. NMDS)
-```{r}
-# Transform data to proportions as appropriate for Bray-Curtis distances
-ps.prop_all <- transform_sample_counts(ps_all, function(otu) otu/sum(otu))
-ord.nmds.bray_all <- ordinate(ps.prop_all, method="NMDS", distance="bray")
-
-plot_ordination(ps.prop_all, ord.nmds.bray_all, color="Species", title="Bray NMDS")
-
-```
-```{r}
-plot_ordination(ps.prop1, ord.nmds.bray1, color="Site", title="Bray NMDS")
-
-plot_ordination(ps.prop2, ord.nmds.bray2, color="Site", title="Bray NMDS")
-```
-```{r}
-plot_ordination(ps.prop1, ord.nmds.bray1, color="Cluster", title="Bray NMDS")
-
-plot_ordination(ps.prop2, ord.nmds.bray2, color="Cluster", title="Bray NMDS")
-```
-
-```{r}
-plot_ordination(ps.prop1, ord.nmds.bray1, color="Habitat", title="Bray NMDS")
-
-plot_ordination(ps.prop2, ord.nmds.bray2, color="Habitat", title="Bray NMDS")
-```
-
-## 5) Make a bar plot that shows the different samples. 
-```{r}
-top20_1 <- names(sort(taxa_sums(ps5), decreasing=TRUE))[1:20]
-ps.top20_1 <- transform_sample_counts(ps5, function(OTU) OTU/sum(OTU))
-ps.top20_1 <- prune_taxa(top20_1, ps.top20_1)
-plot_bar(ps.top20_1, x="t_sp", fill="Genus") + facet_wrap(~t_sp, scales="free_x")
-
-top20_2 <- names(sort(taxa_sums(ps5), decreasing=TRUE))[1:20]
-ps.top20_2 <- transform_sample_counts(ps5, function(OTU) OTU/sum(OTU))
-ps.top20_2 <- prune_taxa(top20_2, ps.top20_2)
-plot_bar(ps.top20_2, x="t_sp", fill="Family") + facet_wrap(~t_sp, scales="free_x")
-```
 
 Run code from dada2_marcos.R
 Data normalization
@@ -309,12 +281,553 @@ ps6<-ps5
 otu_table(ps6) <- ncr
 write.csv(ncr,file="deseq_file_normalized.csv")
 ```
+Rarefaction (skip this part if you have already performed binomial negative normalization)
+```{r}
+# All samples
+sample_sums(ps5)
+min(sample_sums(ps5)) #45460
+Q_raref<-rarefy_even_depth(ps5, sample.size =10000,replace=FALSE, rngseed=T,trimOTUs=T);Q_raref ### rarefaccion to min number 
+min(colSums(otu_table(Q_raref)))
+
+#otuD_r<-as.data.frame(t(otu_table(Q_raref)))
+#phylodiversityRAREF_Q_r<-pd(otuD_r, phy_tree(Q_raref), include.root=TRUE)
+diversity_r_Q<-estimate_richness(Q_raref)
+diversity_r_Q1<-cbind(sample_data(Q_raref),diversity_r_Q)#,phylodiversityRAREF_Q_r) 
+write.csv(diversity_r_Q1,file="alpha_div_rarefy.csv")
+# A subset of samples
+#LRI_DW <- subset_samples(datos, Sample_Type_4=="INF_D_W"); LRI_DW 
+#min(colSums(otu_table(Q_raref)))
+
+#Q_raref<-rarefy_even_depth(LRI_DW, sample.size =1030,replace=FALSE, rngseed=T);Q_raref ### rarefaccion to min number before
+#min(colSums(otu_table(Q_raref)))
+```
 
 Analysis of all samples
 ```{r}
 otuD<-as.data.frame(t(otu_table(ps6)))
 phylodiversityRAREF_Q<-pd(otuD, phy_tree(ps6), include.root=TRUE) ### phyilogenetic diversity. Include root =True tree rooted via midpoint
-diversityRAREF_Q<-estimate_richness(datos)
-diversityRAREF_Q1<-cbind(sample_data(datos),diversityRAREF_Q,phylodiversityRAREF_Q) 
+diversityRAREF_Q<-estimate_richness(ps6)
+diversityRAREF_Q1<-cbind(sample_data(ps6),diversityRAREF_Q,phylodiversityRAREF_Q)
+# Export selected alpha-diversity indices
+write.csv(diversityRAREF_Q1,file="~/Box/Clement_TermiteGut_16S_0108/output/alpha_div_normalized.csv")
+```
+
+Multiplot function
+```{r}
+par(mfrow = c(2, 2))
+
+######## funcion multiplot ######## 
+
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+  
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+  
+  numPlots = length(plots)
+  
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+  
+  if (numPlots==1) {
+    print(plots[[1]])
+    
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+```
+
+Boxplots for diversity rarefy
+```{r}
+observed <- ggplot(diversity_r_Q1, aes(factor(t_sp), Observed))
+observed2<-observed + geom_boxplot(aes(fill = factor(Site)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "OTU richness",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+chao <- ggplot(diversity_r_Q1, aes(factor(t_sp), Chao1))
+chao2<-chao + geom_boxplot(aes(fill = factor(Site)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Chao1 richness",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+shan <- ggplot(diversity_r_Q1, aes(factor(t_sp), Shannon))
+shan2<-shan + geom_boxplot(aes(fill = factor(Site)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Shannon diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+invsimp <- ggplot(diversity_r_Q1, aes(factor(t_sp), InvSimpson))
+invsimp2<- invsimp + geom_boxplot(aes(fill = factor(Site)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+ labs(y = "InvSimpson diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+ACE <- ggplot(diversity_r_Q1, aes(factor(t_sp), ACE))
+ACE2<- ACE + geom_boxplot(aes(fill = factor(Site)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+ labs(y = "ACE diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+#phyl <- ggplot(diversity_r_Q1, aes(factor(t_sp), PD))
+#phyl2<-phyl + geom_boxplot(aes(fill = factor(Site)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Faith's diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+fish <- ggplot(diversity_r_Q1, aes(factor(t_sp), Fisher))
+fish2<- fish + geom_boxplot(aes(fill = factor(Site)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Fisher diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+multiplot(observed2, chao2, invsimp2, shan2, cols=2)  #### to run this fucntion I have to run function multiplot first
+multiplot(fish2, ACE2, cols=2)  #### to run this fucntion I have to run function multiplot first
+```
+
+Boxplots for diversity negative binomial
+```{r}
+observed <- ggplot(diversityRAREF_Q1, aes(factor(t_sp1), Observed))
+observed2<-observed + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "OTU richness",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")
+observed2
+chao <- ggplot(diversityRAREF_Q1, aes(factor(t_sp1), Chao1))
+chao2<-chao + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Chao1 richness",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")
+chao2 #nonparameteric asymptotic estimator of species richness
+shan <- ggplot(diversityRAREF_Q1, aes(factor(t_sp1), Shannon))
+shan2<-shan + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Shannon diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")
+shan2 #Shannon diversity index (H): Includes species richness and species evenness--more weight on richness.
+#Simpson diversity index (D): Estimator of richness and evenness--more weight on species evenness.
+invsimp <- ggplot(diversityRAREF_Q1, aes(factor(t_sp1), InvSimpson))
+invsimp2<- invsimp + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+ labs(y = "InvSimpson diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")
+invsimp2 #effective number of types that is obtained when the weighted arithmetic mean is used to quantify average proportional abundance of types in the dataset of interest.
+ACE <- ggplot(diversityRAREF_Q1, aes(factor(t_sp1), ACE))
+ACE2<- ACE + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+ labs(y = "ACE diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")
+ACE2 #Involves an arbitrary abundance threshold. Only abundance of abundant species is considered.
+phyl <- ggplot(diversityRAREF_Q1, aes(factor(t_sp1), PD))
+phyl2<-phyl + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Faith's diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")
+phyl2
+fish <- ggplot(diversityRAREF_Q1, aes(factor(t_sp1), Fisher))
+fish2<- fish + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Fisher diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")
+fish2
+multiplot(observed2, chao2, invsimp2, phyl2, cols=2)  #### to run this fucntion I have to run function multiplot first
+multiplot(shan2, fish2, ACE2, phyl2, cols=2)  #### to run this fucntion I have to run function multiplot first
+```
+
+Alpha diversity comparisons
+```{r}
+t1<-lmer(Observed~t_sp1+`Collection site`+Habitat+Feeding_Group+t_fam+Subfamily+ (1|Sequencing_group), diversityRAREF_Q1)
+summary(t1) 
+confint(t1) #Serratus is more likely to be 124-392 higher. MS and RR are higher than
+```
+#Try these on just the dataset with Microcerotermes
+```{r}
+microdiv<-diversityRAREF_Q1[diversityRAREF_Q1$t_sp=="M_serratus",]
+t2<-lm(Fisher~`Collection site`+Habitat, microdiv)
+summary(t2) # significant difference JCU is lower than dry savanna
+shan <- ggplot(microdiv, aes(factor(t_sp1), Shannon))
+shan2<-shan + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Shannon diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+shan2
+observed <- ggplot(microdiv, aes(factor(t_sp1), Observed))
+observed2<-observed + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "OTU richness",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+observed2
+chao <- ggplot(microdiv, aes(factor(t_sp1), Chao1))
+chao2<-chao + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Chao1 richness",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+chao2
+fish <- ggplot(microdiv, aes(factor(t_sp1), Fisher))
+fish2<- fish + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Fisher diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+fish2
+phyl <- ggplot(microdiv, aes(factor(t_sp1), PD))
+phyl2<-phyl + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Faith's diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")
+phyl2
+multiplot(observed2,shan2,chao2,fish2,cols=2)
+
+```
+Test for difference in betadiversity with adonis
+```{r}
+uniun<-phyloseq::distance(Q_raref, method="unifrac")
+#uniun<-distance(Q_raref, method="unifrac")
+#uniund<-as.matrix(uniun)
+uniweigh<-phyloseq::distance(Q_raref, method="wunifrac")
+#uniweigh<-distance(Q_raref, method="wunifrac")
+#uniweighd<-as.matrix(uniweigh)
+brayd<-phyloseq::distance(Q_raref, method="bray")
+jaccd<-phyloseq::distance(Q_raref, method="jaccard")
+```
+
+Compare models
+```{r}
+# How you compare models in adonis?
+# Use AIC=2k+n[Ln(2(pi)*RSS/n)+1] and pick the model with lowest AIC score
+# k=parameters, n=samples, RSS=SumsOfSqs
+
+t1<-adonis(brayd~diversityRAREF_Q1$Site, strata=diversityRAREF_Q1$t_sp,perm=10000); t1 #r2=.18, p<0.05
+t2<-adonis(brayd~diversityRAREF_Q1$Cluster, strata=diversityRAREF_Q1$t_sp,perm=10000); t2 #same, probably bc of unclustered ones from SC
+t3<-adonis(brayd~diversityRAREF_Q1$Habitat, strata=diversityRAREF_Q1$t_sp,perm=10000); t3 #R2=.13, p<.05
+t4<-adonis(brayd~diversityRAREF_Q1$Feeding_Group, strata=diversityRAREF_Q1$t_sp,perm=10000); t4 #.09 p=1 not significant
+t5<-adonis(brayd~diversityRAREF_Q1$t_fam, strata=diversityRAREF_Q1$t_sp,perm=10000); t5 # R2=.06, p=1 not sig
+t6<-adonis(brayd~diversityRAREF_Q1$Subfamily, strata=diversityRAREF_Q1$t_sp,perm=10000); t6 #R2=.16, p=1
+
+
+t7<-adonis(uniweigh~diversityRAREF_Q1$t_sp1+diversityRAREF_Q1$Feeding_Group+diversityRAREF_Q1$Subfamily, strata=diversityRAREF_Q1$Mound_ID,perm=10000); t7
+
+t1<-adonis(brayd~diversityRAREF_Q1$category+diversityRAREF_Q1$Feeding_Route1, strata=diversityRAREF_Q1$patient1,perm=10000); t1
+t1<-adonis(jaccd~diversityRAREF_Q1$category+diversityRAREF_Q1$Feeding_Route1, strata=diversityRAREF_Q1$patient1,perm=10000); t1
+```
+
+## 4) Compare beta diversity with ordination. (ex. NMDS)
+```{r}
+# Transform data to proportions as appropriate for Bray-Curtis distances
+ps.prop_all <- transform_sample_counts(ps6, function(otu) otu/sum(otu))
+ord.nmds.bray_all <- ordinate(ps.prop_all, method="NMDS", distance="bray")
+
+phyloseq::plot_ordination(ps.prop_all, ord.nmds.bray_all, color="Sequencing_group", title="Bray NMDS") #ugh this is terrible. it just separates by sequencing group
+
+```
+Filter out samples that don't seem to fit
+```{r}
+ps_set1<-subset_samples(ps6,Sequencing_group=="B1")
+ps_set1_g<-subset_samples(ps_set1,!X.NAME %in% lowcounts)
+ps_set2<-subset_samples(ps6,Sequencing_group=="B2")
+ps_set2_g<-subset_samples(ps_set2,!X.NAME %in% lowcounts)
+ord.nmds.bray_all_set1 <- ordinate(ps_set1_g, method="NMDS", distance="bray")
+phyloseq::plot_ordination(ps_set1_g, ord.nmds.bray_all_set1, color="t_sp", title="Bray NMDS",label="X.NAME")
+# outliers from species: BECC0031 (low read count),BEC004 & BEC010 (same mound, probably mis-identification), BEC0023 (probably mis-ID), OK: BEC0015 (low-ish count),BEC0028 (low count),BEC0018 (low read count)
+
+ord.nmds.bray_all_set2 <- ordinate(ps_set2_g, method="NMDS", distance="bray")
+phyloseq::plot_ordination(ps_set2_g, ord.nmds.bray_all_set2, color="t_sp", title="Bray NMDS",label="X.NAME")
+# BEC321 (low read count), BEC270 (low count), BEC292 (low read count), ok: BEC278 (low read count)
+lowcounts<-c("BEC0031","BEC0004","BEC0010","BEC0018","BEC0023","BEC0015","BEC0028","BEC321","BEC270","BEC292","BEC278")
+ #make a thing that has the ones filtered out
+ps7<-subset_samples(ps6,!X.NAME %in% lowcounts)
+
+```
+Make a phyloseq object of just the genus level
+```{r}
+ps.bygenus<-tax_glom(ps7,taxrank='Genus')
+nrow(ps.bygenus@otu_table) #280
+length(unique(ps7@tax_table[,"Species"])) #3 kingdoms,29 phyla,54 classes,88 order,119 families,131 genus, 56 species
+length(unique(ps.bygenus@tax_table[,"Species"])) #same as above but 1 species
+
+```
+
+```{r}
+# Transform to be only genus
+ps.bygenus.tr <- transform_sample_counts(ps.bygenus, function (x) x / sum(x))
+ps.bygenus.tr.f <- filter_taxa(ps.bygenus.tr, function (x) mean(x) > .005, TRUE) 
+patho.by_genus_plot <- plot_bar(ps.bygenus.tr.f, "Sample", "Abundance", 'Genus', labs(y="Relative Abundance", title = "Genus-level assignments"))
+ps.by_genus_plot <- patho.by_genus_plot + facet_grid( .~ t_sp1, scales = "free", space = "free") +
+  theme_classic() + 
+  #facet_wrap(~t_sp, scales="free_x")+
+  #facet_grid( .~ t_sp, scales = "free", space = "free") + 
+  theme(legend.key.size = unit(.2, "cm")) + 
+  guides(fill=guide_legend(ncol=1,byrow=TRUE)) +
+  theme(axis.text.x = element_text(angle = 90, vjust=0.5, hjust=0))+
+  scale_fill_discrete(name="Genus")+
+  ggtitle("")
+ps.by_genus_plot
+ggsave("plots/MPS.by_genus_.02.pdf", ps.by_genus_plot)
+```
+
+```{r}
+#try genus ordination
+
+ord.nmds.bray_genus <- ordinate(ps.bygenus.tr, method="NMDS", distance="bray")
+
+phyloseq::plot_ordination(ps.bygenus.tr, ord.nmds.bray_genus, color="t_sp1", title="Bray NMDS")
+
+phyloseq::plot_ordination(ps.bygenus.tr, ord.nmds.bray_genus, color="Site", title="Bray NMDS")
+phyloseq::plot_ordination(ps.bygenus.tr, ord.nmds.bray_genus, color="t_sp1",shape="Feeding_Group", title="Bray NMDS")
+```
+make a function for plot
+```{r}
+plot_bar_plot <- function(ps.any, ., Collection.site,keep_percent) {
+  ps.any.tr <- transform_sample_counts(ps.any, function (x) x / sum(x))
+ps.any.f <- filter_taxa(ps.any.tr, function (x) mean(x) > keep_percent, TRUE) 
+  patho.by_any_plot <- plot_bar(ps.any.f, "Sample", "Abundance", 'Genus', labs(y="Relative Abundance", title = "Genus-level assignments"))
+  ps.by_any_plot <- patho.by_any_plot + facet_grid( .~ Collection.site, scales = "free", space = "free") +
+    theme_classic() + 
+    #facet_wrap(~t_sp, scales="free_x")+
+    #facet_grid( .~ t_sp, scales = "free", space = "free") + 
+    theme(legend.key.size = unit(.2, "cm")) + 
+    guides(fill=guide_legend(ncol=1,byrow=TRUE)) +
+    theme(axis.text.x = element_text(angle = 90, vjust=0.5, hjust=0))+
+    scale_fill_discrete(name="Genus")+
+    ggtitle("")
+  ps.by_any_plot 
+}
+```
+
+Make one of these for each species looking at difference in site
+```{r}
+m_serratus<-subset_samples(ps.bygenus,t_sp=="M_serratus")
+
+a_laurensis<-subset_samples(ps.bygenus,t_sp=="A_laurensis")
+c_acinaciformis<-subset_samples(ps.bygenus,t_sp=="C_acinaciformis")
+n_magnus<-subset_samples(ps.bygenus,t_sp=="N_magnus")
+
+# Microcerotermes
+ord.nmds.bray_micro <- ordinate(m_serratus, method="NMDS", distance="bray")
+phyloseq::plot_ordination(m_serratus, ord.nmds.bray_micro, color="Site", title="Bray NMDS")
+plot_bar_plot(m_serratus,.,Collection.site,.005)
+# Higher levels of ruminococcus (breaks down cellulose) in SCL and JCU
+
+#Amitermes
+ord.nmds.bray_ami <- ordinate(a_laurensis, method="NMDS", distance="bray")
+phyloseq::plot_ordination(a_laurensis, ord.nmds.bray_ami, color="Site", title="Bray NMDS",label="X.NAME")
+plot_bar_plot(a_laurensis,.,Collection.site,.01)
+
+#Nasutitermes
+ord.nmds.bray_nasu <- ordinate(n_magnus, method="NMDS", distance="bray")
+phyloseq::plot_ordination(n_magnus, ord.nmds.bray_nasu, color="Site", title="Bray NMDS",label="X.NAME")
+plot_bar_plot(n_magnus,.,Collection.site,.002)
+
+#Coptotermes
+ord.nmds.bray_copto <- ordinate(c_acinaciformis, method="NMDS", distance="bray")
+phyloseq::plot_ordination(c_acinaciformis, ord.nmds.bray_copto, color="Site", title="Bray NMDS",label="X.NAME")
+plot_bar_plot(c_acinaciformis,.,Collection.site,.0005)
+```
+
+Use Deseq to see which taxa are different between Feeding group
+csv with B are made from ps7. without are from ps.bygenus
+```{r}
+diagdds=phyloseq_to_deseq2(ps.bygenus,~Feeding_Group)
+# calculate geometric means prior to estimate size factors
+gm_mean = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+geoMeans = apply(counts(diagdds), 1, gm_mean)
+# Estimate size factors
+diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
+diagdds = DESeq(diagdds, test="Wald", fitType="local")
+
+res = results(diagdds, contrast = c("Feeding_Group", "Grass", "Wood"),alpha=alpha)
+#res = results(diagdds, cooksCutoff = FALSE)
+res = res[order(res$padj, na.last=NA), ]
+View(res)
+alpha = 0.05
+#alpha = 1.1
+sigtab = res[(res$padj < alpha), ]
+sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps7)[rownames(sigtab), ], "matrix"))
+View(sigtab)
+write.csv(sigtab,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_feeding_group_B.csv")
+nrow(sigtab) #3352 total ASV, 114 genera
+```
+Which taxa are different between subfamilies
+```{r}
+diagdds2=phyloseq_to_deseq2(ps.bygenus,~Subfamily)
+# calculate geometric means prior to estimate size factors
+gm_mean2 = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+geoMeans2 = apply(counts(diagdds2), 1, gm_mean2)
+# Estimate size factors
+diagdds2 = estimateSizeFactors(diagdds2, geoMeans = geoMeans2)
+diagdds2 = DESeq(diagdds2, test="Wald", fitType="local")
+
+res2 = results(diagdds2, contrast = c("Subfamily","Termitinae", "Nasutitermitinae"),alpha=alpha)
+#res = results(diagdds, cooksCutoff = FALSE)
+res2 = res2[order(res2$padj, na.last=NA), ]
+View(res2)
+alpha = 0.05
+#alpha = 1.1
+sigtab2 = res2[(res2$padj < alpha), ]
+sigtab2 = cbind(as(sigtab2, "data.frame"), as(tax_table(ps7)[rownames(sigtab2), ], "matrix"))
+View(sigtab2)
+write.csv(sigtab2,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_subfamily_B.csv")
+nrow(sigtab2) # 2882 ASVs, 95 genera
+```
+What taxa are different between species
+```{r}
+diagdds3=phyloseq_to_deseq2(ps.bygenus,~t_sp1)
+# calculate geometric means prior to estimate size factors
+gm_mean3 = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+geoMeans3 = apply(counts(diagdds3), 1, gm_mean3)
+# Estimate size factors
+diagdds3 = estimateSizeFactors(diagdds3, geoMeans = geoMeans3)
+diagdds3 = DESeq(diagdds3, test="Wald", fitType="local")
+
+res3 = results(diagdds3, contrast = c("t_sp1","Amitermes","Nasutitermes"),alpha=alpha)
+#res = results(diagdds, cooksCutoff = FALSE)
+res3 = res3[order(res3$padj, na.last=NA), ]
+View(res3)
+alpha = 0.05
+#alpha = 1.1
+sigtab3 = res3[(res3$padj < alpha), ]
+sigtab3 = cbind(as(sigtab3, "data.frame"), as(tax_table(ps7)[rownames(sigtab3), ], "matrix"))
+View(sigtab3)
+write.csv(sigtab3,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_Ami_Nasu_B.csv")
+nrow(sigtab3) #3029 ASVs, 110 genera
+
+res4 = results(diagdds3, contrast = c("t_sp1","Amitermes","Microcerotermes"),alpha=alpha)
+#res = results(diagdds, cooksCutoff = FALSE)
+res4 = res4[order(res4$padj, na.last=NA), ]
+View(res4)
+alpha = 0.05
+#alpha = 1.1
+sigtab4 = res4[(res4$padj < alpha), ]
+sigtab4 = cbind(as(sigtab4, "data.frame"), as(tax_table(ps7)[rownames(sigtab4), ], "matrix"))
+#View(sigtab4)
+write.csv(sigtab4,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_Ami_Micro_B.csv")
+nrow(sigtab4) #126 genera, 2946 ASVs
+
+res5 = results(diagdds3, contrast = c("t_sp1","Nasutitermes","Microcerotermes"),alpha=alpha)
+#res = results(diagdds, cooksCutoff = FALSE)
+res5 = res5[order(res5$padj, na.last=NA), ]
+#View(res5)
+alpha = 0.05
+#alpha = 1.1
+sigtab5 = res5[(res5$padj < alpha), ]
+sigtab5 = cbind(as(sigtab5, "data.frame"), as(tax_table(ps7)[rownames(sigtab5), ], "matrix"))
+View(sigtab5)
+write.csv(sigtab5,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_Nasu_Micro_B.csv")
+nrow(sigtab5) #3350 ASVs, 106 genera
+
+#Amitermes vs coptotermes
+res6 = results(diagdds3, contrast = c("t_sp1","Amitermes","Coptotermes"),alpha=alpha); res6 = res6[order(res6$padj, na.last=NA), ];sigtab6 = res6[(res6$padj < alpha), ];sigtab6 = cbind(as(sigtab6, "data.frame"), as(tax_table(ps7)[rownames(sigtab6), ], "matrix"))
+write.csv(sigtab6,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_Ami_Copto_B.csv")
+nrow(sigtab6) #135
+
+#Nasutitermes vs coptotermes
+res7 = results(diagdds3, contrast = c("t_sp1","Nasutitermes","Coptotermes"),alpha=alpha); res7 = res7[order(res7$padj, na.last=NA), ];sigtab7 = res7[(res7$padj < alpha), ];sigtab7 = cbind(as(sigtab7, "data.frame"), as(tax_table(ps7)[rownames(sigtab7), ], "matrix"))
+write.csv(sigtab7,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_Nasu_Copto_B.csv")
+nrow(sigtab7) #116
+
+#Microcerotermes vs coptotermes
+res8 = results(diagdds3, contrast = c("t_sp1","Microcerotermes","Coptotermes"),alpha=alpha); res8 = res8[order(res8$padj, na.last=NA), ];sigtab8 = res8[(res8$padj < alpha), ];sigtab8 = cbind(as(sigtab8, "data.frame"), as(tax_table(ps7)[rownames(sigtab8), ], "matrix"))
+write.csv(sigtab8,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_Micro_Copto_B.csv")
+nrow(sigtab8) #120
+
+nrow(sigtab) #3352
+nrow(sigtab2) #2882
+nrow(sigtab3) #3029
+nrow(sigtab4) #2946
+nrow(sigtab5) #3350
+
+otu_w_taxa<-cbind(ps7@otu_table,as(tax_table(ps7)[rownames(ps7@otu_table),],"matrix"))
+write.csv(otu_w_taxa,"~/Box/Clement_TermiteGut_16S_0108/output/deseq/otu_w_taxa_ps7.csv")
+
+genus_w_taxa<-cbind(ps.bygenus@otu_table,as(tax_table(ps.bygenus)[rownames(ps.bygenus@otu_table),],"matrix"))
+write.csv(genus_w_taxa,"~/Box/Clement_TermiteGut_16S_0108/output/deseq/otu_w_taxa_genus.csv")
+
+```
+
+
+Plot differences
+```{r}
+scale_fill_discrete <- function(palname = "Set1", ...) {
+  scale_fill_brewer(palette = palname, ...)
+}
+# Phylum order
+x = tapply(sigtab3$log2FoldChange, sigtab3$Phylum, function(x) max(x))
+x = sort(x, TRUE)
+sigtab3$Phylum = factor(as.character(sigtab3$Phylum), levels=names(x))
+
+# Species order
+x = tapply(sigtab3$log2FoldChange, sigtab3$Genus, function(x) max(x))
+x = sort(x, TRUE)
+sigtab3$Genus = factor(as.character(sigtab3$Genus), levels=names(x))
+
+ggplot(sigtab3, aes(x=Genus, y=log2FoldChange, color=Phylum)) + geom_point(size=6) + 
+  theme(axis.text.x = element_text(angle = -90, hjust = 0, vjust=0.5))
+
+```
+
+Site differences for microcerotermes
+```{r}
+
+```
+
+DESEQ at the phyla level
+```{r}
+ps.byphylum<-tax_glom(ps7,taxrank='Phylum')
+nrow(ps.byphylum@otu_table) #30
+diagdds4=phyloseq_to_deseq2(ps.byphylum,~t_sp1)
+# calculate geometric means prior to estimate size factors
+gm_mean4 = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+geoMeans4 = apply(counts(diagdds4), 1, gm_mean4)
+# Estimate size factors
+diagdds4 = estimateSizeFactors(diagdds4, geoMeans = geoMeans4)
+diagdds4 = DESeq(diagdds4, test="Wald", fitType="local")
+
+res_p1 = results(diagdds4, contrast = c("t_sp1","Amitermes","Microcerotermes"),alpha=alpha)
+#res = results(diagdds, cooksCutoff = FALSE)
+res_p1 = res_p1[order(res_p1$padj, na.last=NA), ]
+sigtab_p1 = res_p1[(res_p1$padj < alpha), ]
+sigtab_p1 = cbind(as(sigtab_p1, "data.frame"), as(tax_table(ps7)[rownames(sigtab_p1), ], "matrix"))
+nrow(sigtab_p1) #22
+sigtab_p1
+write.csv(sigtab_p1,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_Ami_Micro_p1.csv")
+
+res_p2 = results(diagdds4, contrast = c("t_sp1","Amitermes","Nasutitermes"),alpha=alpha)
+#res = results(diagdds, cooksCutoff = FALSE)
+res_p2 = res_p2[order(res_p2$padj, na.last=NA), ]
+sigtab_p2 = res_p2[(res_p2$padj < alpha), ]
+sigtab_p2 = cbind(as(sigtab_p2, "data.frame"), as(tax_table(ps7)[rownames(sigtab_p2), ], "matrix"))
+nrow(sigtab_p2) #20
+sigtab_p1
+write.csv(sigtab_p1,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_Ami_Nasu_p1.csv")
+
+res_p3 = results(diagdds4, contrast = c("t_sp1","Amitermes","Coptotermes"),alpha=alpha)
+#res = results(diagdds, cooksCutoff = FALSE)
+res_p3 = res_p3[order(res_p3$padj, na.last=NA), ]
+sigtab_p3 = res_p3[(res_p3$padj < alpha), ]
+sigtab_p3 = cbind(as(sigtab_p3, "data.frame"), as(tax_table(ps7)[rownames(sigtab_p3), ], "matrix"))
+nrow(sigtab_p1) #22
+sigtab_p3
+write.csv(sigtab_p1,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_Ami_Copto_p1.csv")
+
+res_p4 = results(diagdds4, contrast = c("t_sp1","Microcerotermes","Nasutitermes"),alpha=alpha)
+#res = results(diagdds, cooksCutoff = FALSE)
+res_p4 = res_p4[order(res_p4$padj, na.last=NA), ]
+sigtab_p4 = res_p4[(res_p4$padj < alpha), ]
+sigtab_p4 = cbind(as(sigtab_p4, "data.frame"), as(tax_table(ps7)[rownames(sigtab_p4), ], "matrix"))
+nrow(sigtab_p4) #16
+sigtab_p4
+write.csv(sigtab_p1,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_Micro_Nasu_p1.csv")
+
+res_p5 = results(diagdds4, contrast = c("t_sp1","Microcerotermes","Coptotermes"),alpha=alpha)
+#res = results(diagdds, cooksCutoff = FALSE)
+res_p5 = res_p5[order(res_p5$padj, na.last=NA), ]
+sigtab_p5 = res_p5[(res_p5$padj < alpha), ]
+sigtab_p5 = cbind(as(sigtab_p5, "data.frame"), as(tax_table(ps7)[rownames(sigtab_p5), ], "matrix"))
+nrow(sigtab_p5) #20
+sigtab_p5
+write.csv(sigtab_p1,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_Micro_Copto_p1.csv")
+
+res_p6 = results(diagdds4, contrast = c("t_sp1","Nasutitermes","Coptotermes"),alpha=alpha)
+#res = results(diagdds, cooksCutoff = FALSE)
+res_p6 = res_p6[order(res_p6$padj, na.last=NA), ]
+sigtab_p6 = res_p6[(res_p6$padj < alpha), ]
+sigtab_p6 = cbind(as(sigtab_p6, "data.frame"), as(tax_table(ps7)[rownames(sigtab_p6), ], "matrix"))
+nrow(sigtab_p6) #20
+sigtab_p6
+write.csv(sigtab_p1,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_Nasu_Copto_p1.csv")
+
+# Feeding group and subfamily now
+diagdds5=phyloseq_to_deseq2(ps.byphylum,~Feeding_Group)
+# calculate geometric means prior to estimate size factors
+gm_mean5 = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+geoMeans5 = apply(counts(diagdds5), 1, gm_mean5)
+# Estimate size factors
+diagdds5 = estimateSizeFactors(diagdds5, geoMeans = geoMeans5)
+diagdds5 = DESeq(diagdds5, test="Wald", fitType="local")
+res_fg = results(diagdds5, contrast = c("Feeding_Group", "Grass", "Wood"),alpha=alpha)
+#res = results(diagdds, cooksCutoff = FALSE)
+res_fg = res_fg[order(res_fg$padj, na.last=NA), ]
+sigtab_fg = res_fg[(res_fg$padj < alpha), ]
+sigtab_fg = cbind(as(sigtab_fg, "data.frame"), as(tax_table(ps7)[rownames(sigtab_fg), ], "matrix"))
+write.csv(sigtab_fg,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_feeding_group_phylm.csv")
+nrow(sigtab_fg) #12
+
+#Now subfamily
+diagdds6=phyloseq_to_deseq2(ps.byphylum,~Subfamily)
+# calculate geometric means prior to estimate size factors
+geoMeans6 = apply(counts(diagdds6), 1, gm_mean)
+# Estimate size factors
+diagdds6 = estimateSizeFactors(diagdds6, geoMeans = geoMeans6)
+diagdds6 = DESeq(diagdds6, test="Wald", fitType="local")
+res_sf = results(diagdds6, contrast = c("Subfamily", "Termitinae", "Nasutitermitinae"),alpha=alpha)
+#res = results(diagdds, cooksCutoff = FALSE)
+res_sf = res_sf[order(res_sf$padj, na.last=NA), ]
+sigtab_sf = res_sf[(res_sf$padj < alpha), ]
+sigtab_sf = cbind(as(sigtab_sf, "data.frame"), as(tax_table(ps7)[rownames(sigtab_sf), ], "matrix"))
+write.csv(sigtab_sf,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_subfamily_phylm.csv")
+nrow(sigtab_sf) #14
 ```
 
