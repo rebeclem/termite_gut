@@ -33,7 +33,7 @@ Mt_Lewis_Sclerophyll -16.5828	145.26105 Intermediate
 JCU -16.813150 145.687256 Rainforest
 RR -16.1747194 145.4148556 Rainforest
 ')
-
+sites2<-read.csv("~/Box/termite_microbiome/16S_metadata2.csv")
 ```
 
 2) Plot the GPS coordinates on a map
@@ -98,5 +98,79 @@ AUS_coast <- subset(AUS, FEAT_CODE != "sea"&FEAT_CODE !="island")
 png("figs/OZ_blank.png")
 plot(AUS_coast)
 dev.off()
+```
+Plot map of just Station creek
+```{r}
+# Make a function to plot each site's collections
+site_map <- function(sites2, site_name) {
+  scmmdata<-sites2[sites2$Site==site_name,]
+  minLat<-min(scmmdata$Lat) # -16.66869
+  maxLat<-max(scmmdata$Lat) # -16.61014
+  minLon<-min(scmmdata$Lon) # 145.2212
+  maxLon<-max(scmmdata$Lon) # 145.2792
+  latdif<-maxLat-minLat
+  londif<-maxLon-minLon
+  basesc= get_map(location=c(minLon-londif/6,minLat-latdif/6,maxLon+londif/6,maxLat+latdif/6), zoom = 12, source = "stamen", maptype="toner-background")
+  
+  scmmplot <- ggmap(basesc) +
+    theme(axis.title.y = element_blank(), axis.title.x = element_blank(), panel.border = element_rect(colour = "black", fill=NA, size=1)) +
+    #geom_text(data = pwmmdata, aes(x = Long, y = Lat, label =Site ), size = 2,hjust=-.5) +
+    geom_point(data = scmmdata, aes(x = Lon, y = Lat, color = Species), size = 1.5,position=position_jitter(width=londif/20, height=latdif/50)) +
+    # geom_label_repel(data = map_data, aes(x = termites$lon, y = termites$lat,label = paste(as.character(sites), sep="")), stat = "unique", box.padding = 0.5, segment.color = 'black') +
+   # annotate("text", x = minLat+.01, y = minLon+.01, label = "Site") +
+    ggtitle(site_name)
+    #geom_text(aes(label=Name),hjust=0, vjust=0)
+}
+
+scmmplot<-site_map(sites2,"SC")
+scmmplot+ scalebar(x.min = min(scmmplot$data$lon)+.01, x.max = max(scmmplot$data$lon)-.01,
+             y.min = min(scmmplot$data$lat)+.01, y.max = max(scmmplot$data$lat)-.01,
+             dist = 1, dist_unit = "km", st.size=4, st.dist=.04, #st.size is font size, dist is the scale, st.dist is distance between scale and text
+             st.bottom = TRUE, st.color = "red", 
+             transform = TRUE, model = "WGS84", location="topright",height=.03) 
+ggsave("~/Box/termite_microbiome/Figures/habitatpix/sc_plot.png", scale = 0.75, width = 8,height = 7, units = c("in"), dpi = 300)
+
+```
+
+Plot map of just Pennyweight
+```{r}
+ppmmplot<-site_map(sites2,"PW")
+ppmmplot+scalebar(x.min = min(ppmmplot$data$lon)+.01, x.max = max(ppmmplot$data$lon)-.01,
+             y.min = min(ppmmplot$data$lat)+.01, y.max = max(ppmmplot$data$lat)-.01,
+             dist = 1, dist_unit = "km", st.size=4, st.dist=.04, #st.size is font size, dist is the scale, st.dist is distance between scale and text
+             st.bottom = TRUE, st.color = "red", 
+             transform = TRUE, model = "WGS84", location="topright",height=.03) 
+ggsave("~/Box/termite_microbiome/Figures/habitatpix/pw_plot.png", scale = 0.75, width = 8,height = 7, units = c("in"), dpi = 300)
+```
+
+Plot map of Mt. Lewis Sclerophyll
+```{r}
+msmmplot<-site_map(sites2,"MS")
+msmmplot +
+    scalebar(x.min = min(msmmplot$data$lon)+.0001, x.max = max(msmmplot$data$lon)-.0001,
+             y.min = min(msmmplot$data$lat)+.0001, y.max = max(msmmplot$data$lat)-.0001, dist = 10, dist_unit = "m", st.size=4, st.dist=.06, #st.size is font size, dist is the scale, st.dist is distance between scale and text
+             st.bottom = TRUE, st.color = "red", 
+             transform = TRUE, model = "WGS84", location="topright",height=.03) 
+ggsave("~/Box/termite_microbiome/Figures/habitatpix/ms_plot.png", scale = 0.75, width = 8,height = 7, units = c("in"), dpi = 300)
+```
+Plot map of RR
+```{r}
+rrmmplot<-site_map(sites2,"RR")
+rrmmplot+
+    scalebar(x.min = min(rrmmplot$data$lon)+.0001, x.max = max(rrmmplot$data$lon)-.0001,
+             y.min = min(rrmmplot$data$lat)+.0001, y.max = max(rrmmplot$data$lat)-.0001, dist = 20, dist_unit = "m", st.size=4, st.dist=.06, #st.size is font size, dist is the scale, st.dist is distance between scale and text
+             st.bottom = TRUE, st.color = "red", 
+             transform = TRUE, model = "WGS84", location="topright",height=.03)
+ggsave("~/Box/termite_microbiome/Figures/habitatpix/rr_plot.png", scale = 0.75, width = 8,height = 7, units = c("in"), dpi = 300)
+```
+Plot map of JCU
+```{r}
+jcmmplot<-site_map(sites2,"JC")
+jcmmplot+
+    scalebar(x.min = min(jcmmplot$data$lon)+.0005, x.max = max(jcmmplot$data$lon)-.0005,
+             y.min = min(jcmmplot$data$lat)+.0005, y.max = max(jcmmplot$data$lat)-.0005, dist = 50, dist_unit = "m", st.size=4, st.dist=.08, #st.size is font size, dist is the scale, st.dist is distance between scale and text
+             st.bottom = TRUE, st.color = "red", 
+             transform = TRUE, model = "WGS84", location="topright",height=.03)
+ggsave("~/Box/termite_microbiome/Figures/habitatpix/jc_plot.png", scale = 0.75, width = 8,height = 7, units = c("in"), dpi = 300)
 ```
 
