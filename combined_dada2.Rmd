@@ -7,6 +7,8 @@ editor_options:
   chunk_output_type: console
   
   This should read in two seqtables, combine them and then run assign taxonomy on them. Updated December 21, 2021
+  
+  For maps for this project, see the map_making file
 ---
 
 ```{r setup, include=FALSE}
@@ -28,6 +30,8 @@ library(picante)
 library(lme4) #for glms
 library(vegan) #for comparing betadiversity
 library(geodist) #for calculating distance between GPS coordinates
+library("reshape2")
+library("biomformat") #for picrust2
 ```
 set working directory
 ```{r}
@@ -260,7 +264,7 @@ nrow(ps4@otu_table) #20159, no change from previous
 ps5 = prune_samples(sample_sums(ps4) >= 1000, ps4)
 nrow(ps5@otu_table) #20159, no change
 #without zymo
-ps6<-subset_samples(ps6,t_sp!="zymo")
+ps6<-subset_samples(ps5,t_sp!="zymo")
 summarize_phyloseq(ps6) #tells min: 27950, max:281879, total:14437993, average:112797, median:88753 #singletons: 72 etc.
 
 #Export table of ASVs
@@ -275,45 +279,42 @@ write.csv(table_tax,file="~/Box/termite_microbiome/Dada2/Jan2022/silva_tax_ps5_t
 table_all<-cbind(tax_table(ps5),otu_table(ps5))
 write.csv(table_all,file="~/Box/termite_microbiome/Dada2/Jan2022/table_tax_ps5.csv")
 ```
-2.75 make plots
-Skip this section. Takes too long.
+
+
+2.75 make plots'
+Make a plot. x axis is ordered by species
 ```{r}
-plot1<-plot_bar(ps5,x="t_sp",fill="Order",facet_grid=~Habitat)
-plot1
-p1<-plot1
-plot2<-plot_bar(ps5, x="Species", fill="Family")
-plot2
-plot3<-plot_bar(ps5, "Order", fill="Family", facet_grid=~Species)
-plot3
-ggsave(plot1,"plot1")
+seq.results <- read.csv("~/Box/termite_microbiome/n_reads_track.csv")
+#put into long format
+long_seq.results<-melt(data=seq.results,
+                       id.vars=c("X","Sequencing_group","t_sp","Site"),
+                       variable.name="Status",
+                       value.name="Reads")
 
-# Pathoscope Kingdom-level assignments chart
-ps.byking <- tax_glom(ps5,taxrank = 'Kingdom') #combine all taxa into kingdom-level groups
-ps.byking.tr <- transform_sample_counts(ps.byking, function (x) x / sum(x)) #transform abundances into relative abundances
-#patho.byking.tr.f <- filter_taxa(patho.byking.tr, function (x) max(x) > 1e-2, TRUE) #filter out phyla with < 1% relative abundance.
+long_seq.results$Status <- factor(long_seq.results$Status, levels=c("input","filtered","denoisedF","denoisedR","merged","nonchim")) #this makes raw first
+long_seq.results %>%
+  group_by(Sequencing_group,t_sp)%>%
+  summarise(mean=mean(Reads))
+#remove unwanted levels
+seq.results_sub<-filter(long_seq.results, Status=="input"|Status=="nonchim")
+seq.results_sub<-filter(seq.results_sub, t_sp!="zymo")
 
+seq.results_plot <- ggplot(data=seq.results_sub, aes(x=X, y=Reads, fill=Status)) + geom_bar(stat="identity", position="dodge")
+seq.results_plot <- seq.results_plot + theme_classic() + theme(axis.text.x = element_text(angle = 90, vjust=0.5, hjust=0)) +facet_grid(.~t_sp+ Sequencing_group, scales = "free", space = "free")
+seq.results_plot
+ggsave("~/Box/termite_microbiome/Figures/seq.results_plot.pdf", seq.results_plot,width=10)
 ```
-Reorder variables
-```{r}
-# Change factor levels to be in different order
-ps5@sam_data$t_sp1 <- ps5@sam_data$t_sp
-levels(ps5@sam_data$t_sp1)<-c('Amitermes','Coptotermes','Microcerotermes','Nasutitermes','Zymo')
-ps5@sam_data$t_sp1<-factor(ps5@sam_data$t_sp1, levels=c('Amitermes','Microcerotermes','Nasutitermes','Coptotermes','Zymo'))
 
-# Change sites to be driest to wettest
-ps5@sam_data$Site1<-ps5@sam_data$Site
-levels(ps5@sam_data$Site1)<- c('Zymo','JCU rainforest','Sclerophyll','Dry savanna','Restored rainforest','Wet savanna')
-ps5@sam_data$Site1<-factor(ps5@sam_data$Site1,levels=c('Dry savanna','Wet savanna','Sclerophyll','JCU rainforest','Restored rainforest','Zymo'))
-```
 
 ## 3) Compare alpha diversity between samples.
 ```{r}
 # change legend name
-colnames(ps5@sam_data$Site1)  <- "Collection site"
-rich_site<-plot_richness(ps5, x="Site1", measures=c("Shannon"), color="Site1")+facet_wrap(~t_sp1, scales="free_x")+theme_bw()+ theme(axis.text.x = element_blank())+ scale_color_brewer(palette="Dark2")+xlab('Site1')+ylab('Shannon Diversity')
+colnames(ps6@sam_data$Site1)  <- "Collection site"
+rich_site<-plot_richness(ps6, x="Site1", measures=c("Shannon"), color="Site1")+facet_wrap(~t_sp1, scales="free_x")+theme_bw()+ theme(axis.text.x = element_blank())+ scale_color_brewer(palette="Dark2")+xlab('Site1')+ylab('Shannon Diversity')
 rich_site
 
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/richness2.png",rich_site)
+
 ```
 
 
@@ -321,7 +322,7 @@ Run code from dada2_marcos.R
 Data normalization
 This will use a negative binomial distribution
 ```{r}
-diagdds = phyloseq_to_deseq2(ps5, ~t_sp) # make a deseq object
+diagdds = phyloseq_to_deseq2(ps6, ~t_sp) # make a deseq object
 # Calculate geometric means
 gm_mean = function(x, na.rm=TRUE){
   exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
@@ -340,6 +341,20 @@ ps6<-ps5
 otu_table(ps6) <- ncr
 write.csv(ncr,file="~/Box/termite_microbiome/Dada2/Jan2022/deseq_file_normalized.csv")
 ```
+
+Reorder variables
+```{r}
+# Change factor levels to be in different order
+ps6<-subset_samples(ps6,t_sp!="zymo")
+ps6@sam_data$t_sp1 <- ps6@sam_data$t_sp
+levels(ps6@sam_data$t_sp1)<-c('Amitermes','Coptotermes','Microcerotermes','Nasutitermes')
+ps6@sam_data$t_sp1<-factor(ps6@sam_data$t_sp1, levels=c('Amitermes','Microcerotermes','Nasutitermes','Coptotermes'))
+
+# Change sites to be driest to wettest
+ps6@sam_data$Site1<-ps6@sam_data$Site
+levels(ps6@sam_data$Site1)<- c('JCU rainforest','Sclerophyll','Dry savanna','Restored rainforest','Wet savanna')
+ps6@sam_data$Site1<-factor(ps6@sam_data$Site1,levels=c('Dry savanna','Wet savanna','Sclerophyll','JCU rainforest','Restored rainforest'))
+```
 ## 3) Compare alpha diversity between samples after normalization.
 ```{r}
 # change legend name
@@ -347,30 +362,28 @@ colnames(ps6@sam_data$Site1)  <- "Collection site"
 rich_site<-plot_richness(ps6, x="Site1", measures=c("Shannon"), color="Site1")+facet_wrap(~t_sp1, scales="free_x")+theme_bw()+ theme(axis.text.x = element_blank())+ scale_color_brewer(palette="Dark2")+xlab('Site1')+ylab('Shannon Diversity')
 rich_site
 
+#Fisher is theoretically independent of sample size, so maybe we should use this metric instead
+rich_site_fish<-plot_richness(ps6, x="Site1", measures=c("Fisher"), color="Site1")+facet_wrap(~t_sp1, scales="free_x")+theme_bw()+ theme(axis.text.x = element_blank())+ scale_color_brewer(palette="Dark2")+xlab('Site1')+ylab('Fisher Diversity')
+rich_site_fish
+
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/richness_normalized.png",rich_site)
+
+# Chao1 estimates diversity from abundance data
+rich_site_chao1<-plot_richness(ps6, x="Site1", measures=c("Chao1"), color="Site1")+facet_wrap(~t_sp1, scales="free_x")+theme_bw()+ theme(axis.text.x = element_blank())+ scale_color_brewer(palette="Dark2")+xlab('Site1')+ylab('Chao1 Diversity')
+rich_site_chao1
+
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/chao_richness_normalized.png",rich_site)
+
+one.way <- aov(value ~ Site1, data = rich_site$data[rich_site$data$t_sp=="M_serratus",])
+#shannon diversity is a combination of species richness and evenness
+summary(one.way) # no significant difference in diversity of just M_serratus
+one.way2 <- aov(value ~ Site1, data = rich_site$data[rich_site$data$Site=="PW"|rich_site$data$Site=="SC",])
+summary(one.way2) #1.18e-06 significant difference
+TukeyHSD(one.way2) 
+confint(one.way2) #95% confident that wet savanna is higher in shannoon diversity by .24-.53
+t.test(rich_site$data$Site=="PW",rich_site$data$Site=="SC") #mean of PW: 0.3162393 Mean of SC: 0.4444444 p=.0436
 ```
 
-
-Rarefaction (skip this part if you have already performed binomial negative normalization)
-```{r}
-# All samples
-sample_sums(ps5)
-min(sample_sums(ps5)) #45460
-Q_raref<-rarefy_even_depth(ps5, sample.size =10000,replace=FALSE, rngseed=T,trimOTUs=T);Q_raref ### rarefaccion to min number 
-min(colSums(otu_table(Q_raref)))
-
-#otuD_r<-as.data.frame(t(otu_table(Q_raref)))
-#phylodiversityRAREF_Q_r<-pd(otuD_r, phy_tree(Q_raref), include.root=TRUE)
-diversity_r_Q<-estimate_richness(Q_raref)
-diversity_r_Q1<-cbind(sample_data(Q_raref),diversity_r_Q)#,phylodiversityRAREF_Q_r) 
-write.csv(diversity_r_Q1,file="alpha_div_rarefy.csv")
-# A subset of samples
-#LRI_DW <- subset_samples(datos, Sample_Type_4=="INF_D_W"); LRI_DW 
-#min(colSums(otu_table(Q_raref)))
-
-#Q_raref<-rarefy_even_depth(LRI_DW, sample.size =1030,replace=FALSE, rngseed=T);Q_raref ### rarefaccion to min number before
-#min(colSums(otu_table(Q_raref)))
-```
 
 Analysis of all samples
 ```{r}
@@ -425,59 +438,53 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
 }
 ```
 
-Boxplots for diversity rarefy
+Boxplots for diversity
 ```{r}
-observed <- ggplot(diversityNORM_Q1, aes(factor(t_sp), Observed))
-observed2<-observed + geom_boxplot(aes(fill = factor(Site)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "OTU richness",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
-chao <- ggplot(diversityNORM_Q1, aes(factor(t_sp), Chao1))
-chao2<-chao + geom_boxplot(aes(fill = factor(Site)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Chao1 richness",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
-shan <- ggplot(diversityNORM_Q1, aes(factor(t_sp), Shannon))
-shan2<-shan + geom_boxplot(aes(fill = factor(Site)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Shannon diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
-invsimp <- ggplot(diversityNORM_Q1, aes(factor(t_sp), InvSimpson))
-invsimp2<- invsimp + geom_boxplot(aes(fill = factor(Site)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+ labs(y = "InvSimpson diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
-ACE <- ggplot(diversityNORM_Q1, aes(factor(t_sp), ACE))
-ACE2<- ACE + geom_boxplot(aes(fill = factor(Site)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+ labs(y = "ACE diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
-phyl <- ggplot(diversityNORM_Q1, aes(factor(t_sp), PD))
-phyl2<-phyl + geom_boxplot(aes(fill = factor(Site)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Faith's diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
-fish <- ggplot(diversityNORM_Q1, aes(factor(t_sp), Fisher))
-fish2<- fish + geom_boxplot(aes(fill = factor(Site)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Fisher diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
-multiplot(observed2, chao2, invsimp2, shan2, cols=2)  #### to run this fucntion I have to run function multiplot first
-multiplot(fish2, ACE2, cols=2)  #### to run this fucntion I have to run function multiplot first
-```
-
-Boxplots for diversity negative binomial
-```{r}
-observed <- ggplot(diversityRAREF_Q1, aes(factor(t_sp1), Observed))
-observed2<-observed + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "OTU richness",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")
-observed2
-chao <- ggplot(diversityRAREF_Q1, aes(factor(t_sp1), Chao1))
-chao2<-chao + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Chao1 richness",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")
+observed <- ggplot(diversityNORM_Q1, aes(factor(t_sp1), Observed))
+observed2<-observed + geom_boxplot(aes(fill = Site1),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "OTU richness",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")+theme_classic()
+chao <- ggplot(diversityNORM_Q1, aes(factor(t_sp1), Chao1))
+chao2<-chao + geom_boxplot(aes(fill = Site1),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Chao1 richness",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")+theme_classic()
 chao2 #nonparameteric asymptotic estimator of species richness
-shan <- ggplot(diversityRAREF_Q1, aes(factor(t_sp1), Shannon))
-shan2<-shan + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Shannon diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")
-shan2 #Shannon diversity index (H): Includes species richness and species evenness--more weight on richness.
+shan <- ggplot(diversityNORM_Q1, aes(factor(t_sp1), Shannon))
+shan2<-shan + geom_boxplot(aes(fill = Site1),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Shannon diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")+theme_classic()
+#Shannon diversity index (H): Includes species richness and species evenness--more weight on richness.
 #Simpson diversity index (D): Estimator of richness and evenness--more weight on species evenness.
-invsimp <- ggplot(diversityRAREF_Q1, aes(factor(t_sp1), InvSimpson))
-invsimp2<- invsimp + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+ labs(y = "InvSimpson diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")
+invsimp <- ggplot(diversityNORM_Q1, aes(factor(t_sp1), InvSimpson))
+invsimp2<- invsimp + geom_boxplot(aes(fill = Site1),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+ labs(y = "InvSimpson diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")+theme_classic()
 invsimp2 #effective number of types that is obtained when the weighted arithmetic mean is used to quantify average proportional abundance of types in the dataset of interest.
-ACE <- ggplot(diversityRAREF_Q1, aes(factor(t_sp1), ACE))
-ACE2<- ACE + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+ labs(y = "ACE diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")
+ACE <- ggplot(diversityNORM_Q1, aes(factor(t_sp1), ACE))
+ACE2<- ACE + geom_boxplot(aes(fill = Site1),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+ labs(y = "ACE diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")+theme_classic()
 ACE2 #Involves an arbitrary abundance threshold. Only abundance of abundant species is considered.
-phyl <- ggplot(diversityRAREF_Q1, aes(factor(t_sp1), PD))
-phyl2<-phyl + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Faith's diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")
-phyl2
-fish <- ggplot(diversityRAREF_Q1, aes(factor(t_sp1), Fisher))
-fish2<- fish + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Fisher diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")
-fish2
-multiplot(observed2, chao2, invsimp2, phyl2, cols=2)  #### to run this fucntion I have to run function multiplot first
-multiplot(shan2, fish2, ACE2, phyl2, cols=2)  #### to run this fucntion I have to run function multiplot first
+phyl <- ggplot(diversityNORM_Q1, aes(factor(t_sp1), PD))
+phyl2<-phyl + geom_boxplot(aes(fill = Site1),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Faith's diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")+theme_classic()
+fish <- ggplot(diversityNORM_Q1, aes(factor(t_sp1), Fisher))
+fish2<- fish + geom_boxplot(aes(fill = Site1),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Fisher diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")+theme_classic()
+multiplot(observed2, shan2, chao2, fish2, cols=2)  #### to run this fucntion I have to run function multiplot first
+multiplot(fish2, ACE2, cols=2)  #### to run this fucntion I have to run function multiplot first
 ```
 
 Alpha diversity comparisons
 ```{r}
-t1<-lmer(Observed~t_sp1+`Collection site`+Habitat+Feeding_Group+t_fam+Subfamily+ (1|Sequencing_group), diversityRAREF_Q1)
+#Kruskal wallace between sequencing batches
+kruskal.test(diversityNORM_Q1$Observed,diversityNORM_Q1$Sequencing_group) #yes significant p=2.7e-16
+kruskal.test(diversityNORM_Q1$Shannon,diversityNORM_Q1$Sequencing_group)
+kruskal.test(diversityNORM_Q1$Chao1,diversityNORM_Q1$Sequencing_group)
+kruskal.test(diversityNORM_Q1$Fisher,diversityNORM_Q1$Sequencing_group)
+
+t1<-lmer(Observed~t_sp1+Site1+ (1|Sequencing_group), diversityNORM_Q1)
 summary(t1) 
 confint(t1) #Serratus is more likely to be 124-392 higher. MS and RR are higher than
+
+t1_shan<-lmer(Shannon~t_sp1+Site1+ (1|Sequencing_group), diversityNORM_Q1)
+summary(t1_shan) 
+confint(t1_shan)
+t1_fish<-lmer(Fisher~t_sp1+Site+Habitat+Feeding_Group+ (1|Sequencing_group), diversityNORM_Q1)
+
+#Use fisher diversity which is theoretically independent of sample size.
+t2<-lm(Chao1~Site, diversityNORM_Q1[diversityNORM_Q1$t_sp1=="Microcerotermes",])
+t2
+confint(t2)
+
 ```
 #Try these on just the dataset with Microcerotermes
 ```{r}
@@ -505,7 +512,11 @@ multiplot(observed2,shan2,chao2,fish2,cols=2)
 Filter out samples that don't seem to fit
 ```{r}
 # BEC321 (low read count), BEC270 (low count), BEC292 (low read count), ok: BEC278 (low read count)
-lowcounts<-c("BEC0031","BEC0004","BEC0010","BEC0018","BEC0023","BEC0015","BEC0028","BEC321","BEC270","BEC292","BEC278","Zymo","BEC0057","flexcleaned")
+# Which ones have the lowest read counts?
+colSums(ps6@otu_table[, order(colSums(ps6@otu_table))])
+# ones that are less than
+lowcounts<-c("BEC321","BEC278",268,274,280,"BEC270","BEC292",263,"Zymo","BEC0057","flexcleaned")
+problematic<-c("BEC0031","BEC0004","BEC0010","BEC0018","BEC0023","BEC0015","BEC0028")
  #make a thing that has the ones filtered out
 ps7<-subset_samples(ps6,!X.NAME %in% lowcounts)
 ps_set1<-subset_samples(ps6,Sequencing_group=="B1")
@@ -558,7 +569,7 @@ ord.nmds.bray_genus <- ordinate(ps.bygenus.tr, method="NMDS", distance="bray")
 phyloseq::plot_ordination(ps.bygenus.tr, ord.nmds.bray_genus, color="t_sp1", title="Bray NMDS")
 
 NMDS_site_genus<-phyloseq::plot_ordination(ps.bygenus.tr, ord.nmds.bray_genus, color="Site", title="Bray NMDS")
-phyloseq::plot_ordination(ps.bygenus.tr, ord.nmds.bray_genus, color="t_sp1",shape="Feeding_Group", title="Bray NMDS")
+phyloseq::plot_ordination(ps.bygenus.tr, ord.nmds.bray_genus, color="Site1",shape="Sequencing_group", title="Bray NMDS")
 
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/NMDS_site_genus.png", NMDS_site_genus)
 ```
@@ -622,18 +633,22 @@ nrow(zymo1@otu_table) #Jan: 9 genera
 
 # Microcerotermes
 ord.nmds.bray_micro <- ordinate(m_serratus, method="NMDS", distance="bray")
-phyloseq::plot_ordination(m_serratus, ord.nmds.bray_micro, color="Site1", title="Bray NMDS")
+m_serratus_plot<-phyloseq::plot_ordination(m_serratus, ord.nmds.bray_micro, color="Site1", title="Bray NMDS")
+m_serratus_plot + stat_ellipse(type="norm", linetype=1) +  theme_bw()
+ordiellipse(m_serratus_plot, groups = "species", display = "sites", kind = "sd", conf = 0.95, col = "black", w = NULL)
+nmds_phyloseq(m_serratus, treatment, method = 'bray', circle = 0.95,
+labels = NULL, colors = 'default', verbose = TRUE)
 plot_bar_plot(m_serratus,.,Site1,0.005)
 # Higher levels of ruminococcus (breaks down cellulose) in SCL and JCU
 
 #Amitermes
-ord.nmds.bray_ami <- ordinate(a_laurensis, method="NMDS", distance="bray")
-phyloseq::plot_ordination(a_laurensis, ord.nmds.bray_ami, color="Site1", title="Bray NMDS")#,label="X.NAME")
+ord.nmds.bray_ami <- ordinate(a_laurensis, method="NMDS", distance="jaccard")
+phyloseq::plot_ordination(a_laurensis, ord.nmds.bray_ami, color="Site1",shape="Sequencing_group", title="Bray NMDS")#,label="X.NAME")
 plot_bar_plot(a_laurensis,.,Collection.site,.005)
 
 #Nasutitermes
-ord.nmds.bray_nasu <- ordinate(n_magnus, method="NMDS", distance="bray")
-phyloseq::plot_ordination(n_magnus, ord.nmds.bray_nasu, color="Site1", title="Bray NMDS")#,label="X.NAME")
+ord.nmds.bray_nasu <- ordinate(n_magnus, method="NMDS", distance="jaccard")
+phyloseq::plot_ordination(n_magnus, ord.nmds.bray_nasu, color="Site1",shape="Sequencing_group", title="Bray NMDS")#,label="X.NAME")
 plot_bar_plot(n_magnus,.,Site1,.005)
 
 #Coptotermes
@@ -716,9 +731,9 @@ summary(m1)
 ggplot(model_df,aes(sampledist,commdist)) +geom_point(aes(color=samespec,shape=samesite))
 
 
-# Hmmm. I'd actually like to do this with each individual species
+# Hmmm. I'd actually like to do this with each individual species. Change this from Unifrac (phylogenetic) to jaccard (presence absence) to Bray (includes relative abundance)
 distance_phyloseq <- function(a_laurensis1) {
-  commdist<-as.matrix(phyloseq::distance(a_laurensis1, method="unifrac"))
+  commdist<-as.matrix(phyloseq::distance(a_laurensis1, method="bray"))
   commdist=as.numeric(commdist[lower.tri(commdist)])
   
   df_distance<-as.matrix(a_laurensis1@sam_data[,c(12,13)])
@@ -750,54 +765,128 @@ distance_phyloseq <- function(a_laurensis1) {
 #Everything together
 all_model<-distance_phyloseq(ps7)
 ggplot(all_model,aes(sampledist,commdist)) +geom_point(aes(shape=samespec,color=samesite))+ggtitle("All species, all sites")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/allsp_allsites.png")
 m1 <- lm(commdist ~ sampledist + samespec + samesite, data=all_model)
-summary(m1) # sample distance is not significant. same site and same species have a negative association.
+summary(m1) # sample distance is not significant. same site and same species have a negative association for unifrac.
+#jaccard: same site: sample dist, samespecyes and samesiteyes all negatively correlated with community distance
+#bray; all significant
 
 a_model<-distance_phyloseq(a_laurensis1)
 ggplot(a_model,aes(sampledist,commdist)) + geom_point(aes(color=samesite))+ggtitle("Amitermes laurensis") #+stat_summary(fun.data=mean_cl_normal) +
    #geom_smooth(method='lm',formula=commdist ~  sampledist *samesite, data=a_model)
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Amitermes_allsites.png")
 m2 <- lm(commdist ~  sampledist *samesite, data=a_model)
-summary(m2) #no significance or interaction
+summary(m2) #no significance or interaction with unifrac or bray
 
 c_model<-distance_phyloseq(c_acinaciformis1)
 ggplot(c_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("Coptotermes acinaciformis")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Coptotermes_allsites.png")
 m3 <- lm(commdist ~  sampledist *samesite, data=c_model)
 summary(m3) # no significance or interaction
 
 m_model<-distance_phyloseq(m_serratus1)
 ggplot(m_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("Microcerotermes serratus")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_allsites.png")
 m4 <- lm(commdist ~  sampledist*samesite, data=m_model)
-summary(m4) #sample dist and samesiteyes is negatively associated
+summary(m4) #sample dist and samesiteyes is negatively associated unifrac and bray and jaccard
 
 n_model<-distance_phyloseq(n_magnus1)
 ggplot(n_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("Nasutitermes magnus")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Nasutitermes_allsites.png")
 m5 <- lm(commdist ~  sampledist*samesite, data=n_model)
-summary(m5) #sampledist, samesiteyes have negative association, positive interaction
+summary(m5) #sampledist, samesiteyes have negative association, positive interaction for unifrac and bray.
 
 # should we make a thing that says same site?
 # All species, just two sites
 pw_sc<-subset_samples(ps7,Site %in% c("SC","PW"))
 pw_sc<-prune_taxa(taxa_sums(pw_sc)>0, pw_sc)
 pw_sc_model<-distance_phyloseq(pw_sc)
-ggplot(pw_sc_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("Only savanna sites")
+ggplot(pw_sc_model,aes(sampledist,commdist)) +geom_point(aes(color=samespec,shape=samesite))+ggtitle("Only savanna sites")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/allsp_Savanna.png")
 m6 <- lm(commdist ~  sampledist*samesite, data=pw_sc_model)
-summary(m6) #all significant
+summary(m6) #all significant unifrac. significant interaction between sample dist and samesite yes lollll
 
 # amitermes each site
 a_pw<-subset_samples(a_laurensis1,Site=="PW")
 a_pw_model<-distance_phyloseq(a_pw)
 ggplot(a_pw_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("PW Amitermes")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Amitermes_PW.png")
 m7 <- lm(commdist ~  sampledist, data=a_pw_model)
 summary(m7) # not significant
 a_sc<-subset_samples(a_laurensis1,Site=="SC")
 a_sc_model<-distance_phyloseq(a_sc)
 ggplot(a_sc_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("SC Amitermes")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Amitermes_SC.png")
 m8 <- lm(commdist ~  sampledist, data=a_sc_model)
 summary(m8) #not significant
 
-# microcerotermes each site
 # nasutitermes each site
+n_pw<-subset_samples(n_magnus1,Site=="PW")
+n_pw_model<-distance_phyloseq(n_pw)
+ggplot(n_pw_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("PW Nasutitermes")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Nasutitermes_PW.png")
+m9 <- lm(commdist ~  sampledist, data=n_pw_model)
+summary(m9) # yes significant unifrac and jaccard and bray
+n_sc<-subset_samples(n_magnus1,Site=="SC")
+n_sc_model<-distance_phyloseq(n_sc)
+ggplot(n_sc_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("SC Nasutitermes")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Nasutitermes_SC.png")
+m10 <- lm(commdist ~  sampledist, data=n_sc_model)
+summary(m10) # not significant
 # coptotermes each site
+c_pw<-subset_samples(c_acinaciformis1,Site=="PW")
+c_pw_model<-distance_phyloseq(c_pw)
+ggplot(c_pw_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("PW Coptotermes")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Coptotermes_PW.png")
+m11 <- lm(commdist ~  sampledist, data=c_pw_model)
+summary(m11) # not significant
+c_sc<-subset_samples(c_acinaciformis1,Site=="SC")
+c_sc_model<-distance_phyloseq(c_sc)
+ggplot(c_sc_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("SC Coptotermes")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Coptotermes_SC.png")
+m12 <- lm(commdist ~  sampledist, data=c_sc_model)
+summary(m12) #not significant
+# microcerotermes each site
+m_pw<-subset_samples(m_serratus1,Site=="PW")
+m_pw_model<-distance_phyloseq(m_pw)
+ggplot(m_pw_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("PW Microcerotermes")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_PW.png")
+m13 <- lm(commdist ~  sampledist, data=m_pw_model)
+summary(m13) # not significant
+m_sc<-subset_samples(m_serratus1,Site=="SC")
+m_sc_model<-distance_phyloseq(m_sc)
+ggplot(m_sc_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("SC Microcerotermes")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_SC.png")
+m14 <- lm(commdist ~  sampledist, data=m_sc_model)
+summary(m14) #not significant
+m_ms<-subset_samples(m_serratus1,Site=="MS")
+m_ms_model<-distance_phyloseq(m_ms)
+ggplot(m_ms_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("MS Microcerotermes")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_MS.png")
+m15 <- lm(commdist ~  sampledist, data=m_ms_model)
+summary(m15) #not significant
+m_jc<-subset_samples(m_serratus1,Site=="JC")
+m_jc_model<-distance_phyloseq(m_jc)
+ggplot(m_jc_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("JC Microcerotermes")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_JC.png")
+m16 <- lm(commdist ~  sampledist, data=m_jc_model)
+summary(m16) # not significant
+m_rr<-subset_samples(m_serratus1,Site=="RR")
+m_rr_model<-distance_phyloseq(m_rr)
+ggplot(m_rr_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("RR Microcerotermes")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_RR.png")
+m17 <- lm(commdist ~  sampledist, data=m_rr_model)
+summary(m17) #not significant with unifrac, but significant with jaccard and bray
+```
+Heat Map
+```{r}
+plot_heatmap(ps.bygenus.tr.f, sample.label="t_sp", taxa.label = "Family")
+```
+Scatter plot for each site
+```{r}
+ggplot(metadata,aes(Lat, Lon,color=t_sp))+geom_point()
+# PW
+ggplot(metadata[which[metadata$Site=="PW",],],aes(Lat, Lon,color=t_sp))+geom_point()
 ```
 
 
@@ -1084,5 +1173,10 @@ sigtab_sf = res_sf[(res_sf$padj < alpha), ]
 sigtab_sf = cbind(as(sigtab_sf, "data.frame"), as(tax_table(ps7)[rownames(sigtab_sf), ], "matrix"))
 write.csv(sigtab_sf,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_subfamily_phylm.csv")
 nrow(sigtab_sf) #14
+```
+
+Export biom files for picrust2
+```{r}
+
 ```
 
