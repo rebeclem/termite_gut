@@ -29,9 +29,17 @@ library(microbiome)
 library(picante)
 library(lme4) #for glms
 library(vegan) #for comparing betadiversity
+library(DESeq2) #differential abundance
 library(geodist) #for calculating distance between GPS coordinates
 library("reshape2")
 library("biomformat") #for picrust2
+library("venneuler") #venn diagrams
+library(tidyverse)
+library(grid)
+library(UpSetR) #for making upset plots
+library(ComplexHeatmap)
+library(scales) #for putting things to percents
+
 ```
 set working directory
 ```{r}
@@ -264,8 +272,7 @@ nrow(ps4@otu_table) #20159, no change from previous
 ps5 = prune_samples(sample_sums(ps4) >= 1000, ps4)
 nrow(ps5@otu_table) #20159, no change
 #without zymo
-ps6<-subset_samples(ps5,t_sp!="zymo")
-summarize_phyloseq(ps6) #tells min: 27950, max:281879, total:14437993, average:112797, median:88753 #singletons: 72 etc.
+
 
 #Export table of ASVs
 table_otu<-otu_table(ps5)
@@ -308,8 +315,11 @@ ggsave("~/Box/termite_microbiome/Figures/seq.results_plot.pdf", seq.results_plot
 
 ## 3) Compare alpha diversity between samples.
 ```{r}
+ps6<-subset_samples(ps5,t_sp!="zymo")
+summarize_phyloseq(ps6) #tells min: 27950, max:281879, total:14437993, average:112797, median:88753 #singletons: 72 etc.
+
 # change legend name
-colnames(ps6@sam_data$Site1)  <- "Collection site"
+#colnames(ps6@sam_data$Site1)  <- "Collection site"
 rich_site<-plot_richness(ps6, x="Site1", measures=c("Shannon"), color="Site1")+facet_wrap(~t_sp1, scales="free_x")+theme_bw()+ theme(axis.text.x = element_blank())+ scale_color_brewer(palette="Dark2")+xlab('Site1')+ylab('Shannon Diversity')
 rich_site
 
@@ -337,15 +347,16 @@ normcountsrd<-round(normcounts, digits = 0)
 # Transform matrix of normalized counts to phyloseq object
 ncr<-otu_table(normcountsrd, taxa_are_rows = TRUE) 
 # Replace otu_table in original phyloseq object
-ps6<-ps5
-otu_table(ps6) <- ncr
+ps6b<-ps6
+otu_table(ps6b) <- ncr
+ps6<-ps6b
 write.csv(ncr,file="~/Box/termite_microbiome/Dada2/Jan2022/deseq_file_normalized.csv")
 ```
 
 Reorder variables
 ```{r}
 # Change factor levels to be in different order
-ps6<-subset_samples(ps6,t_sp!="zymo")
+#ps6<-subset_samples(ps6,t_sp!="zymo")
 ps6@sam_data$t_sp1 <- ps6@sam_data$t_sp
 levels(ps6@sam_data$t_sp1)<-c('Amitermes','Coptotermes','Microcerotermes','Nasutitermes')
 ps6@sam_data$t_sp1<-factor(ps6@sam_data$t_sp1, levels=c('Amitermes','Microcerotermes','Nasutitermes','Coptotermes'))
@@ -354,6 +365,14 @@ ps6@sam_data$t_sp1<-factor(ps6@sam_data$t_sp1, levels=c('Amitermes','Microcerote
 ps6@sam_data$Site1<-ps6@sam_data$Site
 levels(ps6@sam_data$Site1)<- c('JCU rainforest','Sclerophyll','Dry savanna','Restored rainforest','Wet savanna')
 ps6@sam_data$Site1<-factor(ps6@sam_data$Site1,levels=c('Dry savanna','Wet savanna','Sclerophyll','JCU rainforest','Restored rainforest'))
+ps6@sam_data$Site2<-ps6@sam_data$Site1
+levels(ps6@sam_data$Site2)<- c('Sav1','Sav2','Scl1','RftJ','RftR')
+
+
+#Change Microcerotermes serratus to sp G
+levels(ps6@sam_data$t_sp)<-c(levels(ps6@sam_data$t_sp),"M_sp_G")
+ps6@sam_data$t_sp[100:128]<-"M_sp_G"
+ps6@sam_data$t_sp<-factor(ps6@sam_data$t_sp,levels=c("A_laurensis", "M_serratus","M_sp_G","N_magnus","C_acinaciformis"))
 ```
 ## 3) Compare alpha diversity between samples after normalization.
 ```{r}
@@ -361,6 +380,9 @@ ps6@sam_data$Site1<-factor(ps6@sam_data$Site1,levels=c('Dry savanna','Wet savann
 colnames(ps6@sam_data$Site1)  <- "Collection site"
 rich_site<-plot_richness(ps6, x="Site1", measures=c("Shannon"), color="Site1")+facet_wrap(~t_sp1, scales="free_x")+theme_bw()+ theme(axis.text.x = element_blank())+ scale_color_brewer(palette="Dark2")+xlab('Site1')+ylab('Shannon Diversity')
 rich_site
+
+rich_site_genus<-plot_richness(ps.bygenus, x="Site1", measures=c("Shannon"), color="Site1")+facet_wrap(~t_sp1, scales="free_x")+theme_bw()+ theme(axis.text.x = element_blank())+ scale_color_brewer(palette="Dark2")+xlab('Site1')+ylab('Genus Shannon Diversity')
+rich_site_genus
 
 #Fisher is theoretically independent of sample size, so maybe we should use this metric instead
 rich_site_fish<-plot_richness(ps6, x="Site1", measures=c("Fisher"), color="Site1")+facet_wrap(~t_sp1, scales="free_x")+theme_bw()+ theme(axis.text.x = element_blank())+ scale_color_brewer(palette="Dark2")+xlab('Site1')+ylab('Fisher Diversity')
@@ -393,6 +415,12 @@ diversityNORM_Q<-estimate_richness(ps6)
 diversityNORM_Q1<-cbind(sample_data(ps6),diversityNORM_Q,phylodiversityNORM_Q)
 # Export selected alpha-diversity indices
 write.csv(diversityNORM_Q1,file="~/Box/termite_microbiome/Dada2/Jan2022/alpha_div_normalized.csv")
+
+# Make a diversity df for genus level
+otuD<-as.data.frame(t(otu_table(ps.bygenus)))
+phylodiversityNORM_genus<-pd(otuD, phy_tree(ps.bygenus), include.root=TRUE) 
+diversityNorm_genus<-estimate_richness(ps.bygenus)
+diversityNORM_genus<-cbind(sample_data(ps.bygenus),diversityNorm_genus,phylodiversityNORM_genus)
 ```
 
 Multiplot function
@@ -441,12 +469,12 @@ multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
 Boxplots for diversity
 ```{r}
 observed <- ggplot(diversityNORM_Q1, aes(factor(t_sp1), Observed))
-observed2<-observed + geom_boxplot(aes(fill = Site1),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "OTU richness",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")+theme_classic()
+observed2<-observed + geom_boxplot(aes(fill = Site1),outlier.colour = "black", outlier.size = 1,show.legend = FALSE)+ geom_jitter(size=1,shape=1)+labs(y = "ASV richness",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")+theme_classic()
 chao <- ggplot(diversityNORM_Q1, aes(factor(t_sp1), Chao1))
 chao2<-chao + geom_boxplot(aes(fill = Site1),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Chao1 richness",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")+theme_classic()
 chao2 #nonparameteric asymptotic estimator of species richness
 shan <- ggplot(diversityNORM_Q1, aes(factor(t_sp1), Shannon))
-shan2<-shan + geom_boxplot(aes(fill = Site1),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Shannon diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")+theme_classic()
+shan2<-shan + geom_boxplot(aes(fill = Site1),outlier.colour = "black", outlier.size = 1,show.legend = FALSE)+ geom_jitter(size=1,shape=1)+labs(y = "Shannon diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")+theme_classic()
 #Shannon diversity index (H): Includes species richness and species evenness--more weight on richness.
 #Simpson diversity index (D): Estimator of richness and evenness--more weight on species evenness.
 invsimp <- ggplot(diversityNORM_Q1, aes(factor(t_sp1), InvSimpson))
@@ -461,6 +489,13 @@ fish <- ggplot(diversityNORM_Q1, aes(factor(t_sp1), Fisher))
 fish2<- fish + geom_boxplot(aes(fill = Site1),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Fisher diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")+theme_classic()
 multiplot(observed2, shan2, chao2, fish2, cols=2)  #### to run this fucntion I have to run function multiplot first
 multiplot(fish2, ACE2, cols=2)  #### to run this fucntion I have to run function multiplot first
+
+#Diversity of genera
+gen_observed<- ggplot(diversityNORM_genus, aes(factor(t_sp1), Observed))
+gen_observed2<-gen_observed + geom_boxplot(aes(fill = Site1),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Generic richness",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")+theme_classic()
+gen_shan <- ggplot(diversityNORM_genus, aes(factor(t_sp1), Shannon))
+gen_shan2<-gen_shan + geom_boxplot(aes(fill = Site1),outlier.colour = "black", outlier.size = 1)+ geom_jitter(size=1,shape=1)+labs(y = "Generic Shannon diversity",x="")+ theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ scale_color_brewer(palette="Dark2")+theme_classic()
+multiplot(observed2,shan2,gen_observed2,gen_shan2,cols=2)
 ```
 
 Alpha diversity comparisons
@@ -480,6 +515,15 @@ summary(t1_shan)
 confint(t1_shan)
 t1_fish<-lmer(Fisher~t_sp1+Site+Habitat+Feeding_Group+ (1|Sequencing_group), diversityNORM_Q1)
 
+#Genus comparisons
+t1_genus<-lmer(Observed~t_sp1+Site1+ (1|Sequencing_group), diversityNORM_genus)
+summary(t1_genus)
+confint(t1_genus)
+t1_shan_genus<-lmer(Shannon~t_sp1+Site1+ (1|Sequencing_group), diversityNORM_genus)
+summary(t1_shan_genus) 
+confint(t1_shan_genus)
+anova(t1_shan_genus,t1_genus)
+
 #Use fisher diversity which is theoretically independent of sample size.
 t2<-lm(Chao1~Site, diversityNORM_Q1[diversityNORM_Q1$t_sp1=="Microcerotermes",])
 t2
@@ -488,7 +532,9 @@ confint(t2)
 ```
 #Try these on just the dataset with Microcerotermes
 ```{r}
-microdiv<-diversityRAREF_Q1[diversityRAREF_Q1$t_sp=="M_serratus",]
+microdiv<-diversityNORM_Q1[diversityNORM_Q1$t_sp=="M_serratus",]
+levels(microdiv$t_sp)<-c("A_laurensis","C_acinaciformis","M_serratus","M_sp_G","N_magnus")
+microdiv$t_sp[-(1:13)]<-"M_sp_G"
 t2<-lm(Fisher~`Collection site`+Habitat, microdiv)
 summary(t2) # significant difference JCU is lower than dry savanna
 shan <- ggplot(microdiv, aes(factor(t_sp1), Shannon))
@@ -508,47 +554,96 @@ phyl2<-phyl + geom_boxplot(aes(fill = factor(`Collection site`)),outlier.colour 
 phyl2
 multiplot(observed2,shan2,chao2,fish2,cols=2)
 
+t1_m<-lm(Observed~t_sp+Site1, microdiv)
+summary(t1_m)
+t1_m_shan<-lm(Shannon~t_sp+Site1, microdiv)
+summary(t1_m_shan)
+
 ```
 Filter out samples that don't seem to fit
 ```{r}
-# BEC321 (low read count), BEC270 (low count), BEC292 (low read count), ok: BEC278 (low read count)
-# Which ones have the lowest read counts?
-colSums(ps6@otu_table[, order(colSums(ps6@otu_table))])
-# ones that are less than
-lowcounts<-c("BEC321","BEC278",268,274,280,"BEC270","BEC292",263,"Zymo","BEC0057","flexcleaned")
-problematic<-c("BEC0031","BEC0004","BEC0010","BEC0018","BEC0023","BEC0015","BEC0028")
- #make a thing that has the ones filtered out
-ps7<-subset_samples(ps6,!X.NAME %in% lowcounts)
-ps_set1<-subset_samples(ps6,Sequencing_group=="B1")
-ps_set1_g<-subset_samples(ps_set1,!X.NAME %in% lowcounts)
-ps_set2<-subset_samples(ps6,Sequencing_group=="B2")
-ps_set2_g<-subset_samples(ps_set2,!X.NAME %in% lowcounts)
-ord.nmds.bray_all_set1 <- ordinate(ps_set1_g, method="NMDS", distance="bray")
-phyloseq::plot_ordination(ps_set1_g, ord.nmds.bray_all_set1, color="t_sp", title="Bray NMDS",label="X.NAME")
-# outliers from species: BECC0031 (low read count),BEC004 & BEC010 (same mound, probably mis-identification), BEC0023 (probably mis-ID), OK: BEC0015 (low-ish count),BEC0028 (low count),BEC0018 (low read count)
-ord.nmds.bray_all_set2 <- ordinate(ps_set2_g, method="NMDS", distance="bray")
-phyloseq::plot_ordination(ps_set2_g, ord.nmds.bray_all_set2, color="t_sp", title="Bray NMDS",label="X.NAME")
+ord.nmds.bray_ps5<- ordinate(ps5, method="NMDS", distance="bray")
+phyloseq::plot_ordination(ps5, ord.nmds.bray_ps5, color="t_sp", title="Bray NMDS PS5",label="X.NAME") # to see before normalization
 
-ord.nmds.bray_all_set2 <- ordinate(ps7, method="NMDS", distance="bray")
-phyloseq::plot_ordination(ps7, ord.nmds.bray_all_set2, color="Sequencing_group",shape="t_sp", title="Bray NMDS",label="X.NAME")
+
+ord.nmds.bray_ps6<- ordinate(ps6, method="NMDS", distance="bray")
+phyloseq::plot_ordination(ps6, ord.nmds.bray_ps6, color="t_sp", title="Bray NMDS PS6",label="X.NAME") #after normalization
+ps7<-ps6
+# BEC321 (low read count), BEC270 (low count), BEC292 (low read count), ok: BEC278 (low read count)
+# 4 and 10 are misidentified and 23. Actually nasutitermes
+ps7@sam_data[c("BEC0004","BEC0010","BEC0023"),c("t_sp","t_sp1","t_fam","Subfamily")]<-ps7@sam_data[c("BEC0003"),c("t_sp","t_sp1","t_fam","Subfamily")]
+# 270 should be Amitermes
+ps7@sam_data[c("BEC270"),c("t_sp","t_sp1","t_fam","Subfamily")]<-ps7@sam_data[c("BEC0002"),c("t_sp","t_sp1","t_fam","Subfamily")]
+colSums(ps7@otu_table) #read counts
+# Which ones have the lowest read counts?
+colSums(ps7@otu_table[, order(colSums(ps6@otu_table))])
+# ones that are less than 57K and 28 bc I don't like it
+lowcounts<-c("BEC321","BEC278","BEC268","BEC0018","BEC280","BEC292","BEC0028", "BEC256","BEC0031","BEC274","Zymo","BEC0057","flexcleaned")
+# 263,253,257,254,255,"BEC270"
+# other problematic ones
+problematic<-c("BEC0004","BEC0010","BEC0023","BEC0015","BEC0028")
+ #make a thing that has the ones filtered out
+ps7<-subset_samples(ps7,!X.NAME %in% lowcounts)
+ord.nmds.bray_ps7<- ordinate(ps7, method="NMDS", distance="bray")
+phyloseq::plot_ordination(ps7, ord.nmds.bray_ps7, color="Site1",shape="t_sp", title="Bray NMDS")#,label="X.NAME")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/NMDS_ps7_Bray.png")
+ord.nmds.bray_ps7<- ordinate(ps7, method="NMDS", distance="jaccard")
+phyloseq::plot_ordination(ps7, ord.nmds.bray_ps7, color="Site1",shape="t_sp", title="Jaccard NMDS")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/NMDS_ps7_Jaccard.png")
+ord.nmds.bray_ps7<- ordinate(ps7, method="NMDS", distance="unifrac")
+phyloseq::plot_ordination(ps7, ord.nmds.bray_ps7, color="Site1",shape="t_sp", title="Unifrac NMDS")
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/NMDS_ps7_Unifrac.png")
+
+ps_set1<-subset_samples(ps7,Sequencing_group=="B1")
+#ps_set1_g<-subset_samples(ps_set1,!X.NAME %in% lowcounts)
+ps_set2<-subset_samples(ps7,Sequencing_group=="B2")
+#ps_set2_g<-subset_samples(ps_set2,!X.NAME %in% lowcounts)
+ord.nmds.bray_all_set1 <- ordinate(ps_set1, method="NMDS", distance="bray")
+phyloseq::plot_ordination(ps_set1, ord.nmds.bray_all_set1, color="t_sp", title="Bray NMDS",label="X.NAME")
+# outliers from species: BECC0031 (low read count),BEC004 & BEC010 (same mound, probably mis-identification), BEC0023 (probably mis-ID), OK: BEC0015 (low-ish count),BEC0028 (low count),BEC0018 (low read count)
+ord.nmds.bray_all_set2 <- ordinate(ps_set2, method="NMDS", distance="bray")
+phyloseq::plot_ordination(ps_set2, ord.nmds.bray_all_set2, color="t_sp", title="Bray NMDS",label="X.NAME")
+
 
 
 ```
 Make a phyloseq object of just the genus level
 ```{r}
 ps.bygenus<-tax_glom(ps7,taxrank='Genus')
-nrow(ps.bygenus@otu_table) #280, 277
+ps.bygenus <- prune_taxa(taxa_sums(ps.bygenus)>0, ps.bygenus)
+nrow(ps.bygenus@otu_table) #280, 277 before pruning, 264 after trimming
 length(unique(ps7@tax_table[,"Species"])) #3 kingdoms,29 phyla,54 classes,88 order,119 families,131 genus, 56 species. Jan: 2 kingdoms, 29 phyla, 55 classes, 92 orders, 123 Families, 130 genera, 46 species
 length(unique(ps.bygenus@tax_table[,"Species"])) #same as above but 1 species
 
 ```
 
 ```{r}
-# Transform to be only genus
+# Transform to percentages
+ps.tr <- transform_sample_counts(ps7, function (x) x / sum(x))
 ps.bygenus.tr <- transform_sample_counts(ps.bygenus, function (x) x / sum(x))
+```
+Genus ordination
+```{r}
+#try genus ordination
+
+ord.nmds.bray_genus <- ordinate(ps.bygenus.tr, method="NMDS", distance="bray")
+phyloseq::plot_ordination(ps.bygenus.tr, ord.nmds.bray_genus, color="Site1", shape="t_sp", title="Genus Bray NMDS")
+
+phyloseq::plot_ordination(ps.bygenus.tr, ord.nmds.bray_genus, color="Site2",shape="Sequencing_group", title="Bray NMDS")
+
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/NMDS_site_genus.png", NMDS_site_genus)
+
+# transformed ordination
+ord.nmds.bray_tr <- ordinate(ps.tr, method="NMDS", distance="bray")
+phyloseq::plot_ordination(ps.tr, ord.nmds.bray_tr, shape="t_sp", color="Site1", title="Transformed Bray NMDS")+ labs(shape='Termite species',color="Collection site") 
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/NMDS_site_transformed.png")
+```
+make plot by genus
+```{r}
 ps.bygenus.tr.f <- filter_taxa(ps.bygenus.tr, function (x) mean(x) > .005, TRUE) 
 patho.by_genus_plot <- plot_bar(ps.bygenus.tr.f, "Sample", "Abundance", 'Genus', labs(y="Relative Abundance", title = "Genus-level assignments"))
-ps.by_genus_plot <- patho.by_genus_plot + facet_grid( .~ t_sp1, scales = "free", space = "free") +
+ps.by_genus_plot <- patho.by_genus_plot + facet_grid(.~ t_sp1+Site2, scales = "free", space = "free") +
+  #geom_rect(aes(fill=Site1),xmin =-Inf,xmax=Inf,ymin=-Inf,ymax=Inf,alpha = 0.1)+
   theme_classic() + 
   #facet_wrap(~t_sp, scales="free_x")+
   #facet_grid( .~ t_sp, scales = "free", space = "free") + 
@@ -559,20 +654,11 @@ ps.by_genus_plot <- patho.by_genus_plot + facet_grid( .~ t_sp1, scales = "free",
   ggtitle("")
 ps.by_genus_plot
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/MPS.by_genus_0.005.pdf", ps.by_genus_plot)
+
+
 ```
 
-```{r}
-#try genus ordination
 
-ord.nmds.bray_genus <- ordinate(ps.bygenus.tr, method="NMDS", distance="bray")
-
-phyloseq::plot_ordination(ps.bygenus.tr, ord.nmds.bray_genus, color="t_sp1", title="Bray NMDS")
-
-NMDS_site_genus<-phyloseq::plot_ordination(ps.bygenus.tr, ord.nmds.bray_genus, color="Site", title="Bray NMDS")
-phyloseq::plot_ordination(ps.bygenus.tr, ord.nmds.bray_genus, color="Site1",shape="Sequencing_group", title="Bray NMDS")
-
-ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/NMDS_site_genus.png", NMDS_site_genus)
-```
 make a function for plot
 ```{r}
 plot_bar_plot <- function(ps.any, ., Site1,keep_percent) {
@@ -591,75 +677,127 @@ ps.any.f <- filter_taxa(ps.any.tr, function (x) mean(x) > keep_percent, TRUE)
   ps.by_any_plot 
 }
 ```
+Plot phylum
+```{r}
+ps.any.tr <- transform_sample_counts(ps.byphylum, function (x) x / sum(x))
+keep_percent<-.005
+ps.any.f <- filter_taxa(ps.any.tr, function (x) mean(x) > keep_percent, TRUE) 
+  patho.by_any_plot <- plot_bar(ps.any.f, "Sample", "Abundance", 'Phylum', labs(y="Relative Abundance", title = "Phylum-level assignments"))
+  ps.by_phylum_plot <- patho.by_any_plot + facet_grid( .~ t_sp, scales = "free", space = "free") +
+    theme_classic() + 
+    #facet_wrap(~t_sp, scales="free_x")+
+    #facet_grid( .~ t_sp, scales = "free", space = "free") + 
+    theme(legend.key.size = unit(.2, "cm")) + 
+    guides(fill=guide_legend(ncol=1,byrow=TRUE)) +
+    theme(axis.text.x = element_text(angle = 90, vjust=0.5, hjust=0))+
+    scale_fill_discrete(name="t_sp")+
+    ggtitle("")
+  ps.by_phylum_plot 
+  ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/MPS.by_phylum_0.005.pdf", ps.by_phylum_plot)
+```
 
 Make one of these for each species looking at difference in site
 ```{r}
 nrow(ps7@otu_table) #20159 
 nrow(ps.bygenus@otu_table) #277
+
 # How many taxa are there?
 ps8 <- prune_taxa(taxa_sums(ps7)>0, ps7)
-nrow(ps8@otu_table) #18591
+nrow(ps8@otu_table) #18591, #Jan 19017
 
-m_serratus<-subset_samples(ps.bygenus,t_sp=="M_serratus")
+
+m_serratus<-subset_samples(ps.bygenus,t_sp1=="Microcerotermes")
 m_serratus<-prune_taxa(taxa_sums(m_serratus)>0, m_serratus)
-m_serratus1<-subset_samples(ps7,t_sp=="M_serratus")
+m_serratus1<-subset_samples(ps.tr,t_sp1=="Microcerotermes") # with transformed data
 m_serratus1<-prune_taxa(taxa_sums(m_serratus1)>0, m_serratus1)
-nrow(m_serratus@otu_table) #4480 OTUs, 109 genera, Jan: 109
+m_serratus2<-subset_samples(ps8,t_sp1=="Microcerotermes") #with whole data
+m_serratus2<-prune_taxa(taxa_sums(m_serratus2)>0, m_serratus2)
+nrow(m_serratus@otu_table)
+nrow(m_serratus1@otu_table)#4448 OTUs, 109 genera, Jan: 109
+nrow(m_serratus2@otu_table)
 
 a_laurensis<-subset_samples(ps.bygenus,t_sp=="A_laurensis")
 a_laurensis<-prune_taxa(taxa_sums(a_laurensis)>0, a_laurensis)
-a_laurensis1<-subset_samples(ps7,t_sp=="A_laurensis")
+a_laurensis1<-subset_samples(ps.tr,t_sp=="A_laurensis")
 a_laurensis1<-prune_taxa(taxa_sums(a_laurensis1)>0, a_laurensis1)
-nrow(a_laurensis@otu_table) #6933 OTUs, 186 genera, Jan: 186
+nrow(a_laurensis@otu_table) #7652 OTUs, 184 genera
 nrow(a_laurensis1@otu_table)
+a_laurensis2<-subset_samples(ps8,t_sp=="A_laurensis")
+a_laurensis2<-prune_taxa(taxa_sums(a_laurensis2)>0, a_laurensis2)
 
 c_acinaciformis<-subset_samples(ps.bygenus,t_sp=="C_acinaciformis")
 c_acinaciformis<-prune_taxa(taxa_sums(c_acinaciformis)>0, c_acinaciformis)
-c_acinaciformis1<-subset_samples(ps7,t_sp=="C_acinaciformis")
+c_acinaciformis1<-subset_samples(ps.tr,t_sp=="C_acinaciformis")
 c_acinaciformis1<-prune_taxa(taxa_sums(c_acinaciformis1)>0, c_acinaciformis1)
-nrow(c_acinaciformis@otu_table) # 3767 OTUs, 135 genera, Jan: 135
+nrow(c_acinaciformis@otu_table) # 4069 OTUs, 145 genera, Jan: 135
+nrow(c_acinaciformis1@otu_table) 
+c_acinaciformis2<-subset_samples(ps8,t_sp=="C_acinaciformis")
+c_acinaciformis2<-prune_taxa(taxa_sums(c_acinaciformis2)>0, c_acinaciformis2)
 
 n_magnus<-subset_samples(ps.bygenus,t_sp=="N_magnus")
 n_magnus<-prune_taxa(taxa_sums(n_magnus)>0, n_magnus)
-n_magnus1<-subset_samples(ps7,t_sp=="N_magnus")
+n_magnus1<-subset_samples(ps.tr,t_sp=="N_magnus")
 n_magnus1<-prune_taxa(taxa_sums(n_magnus1)>0, n_magnus1)
-nrow(n_magnus@otu_table) #4182 OTUs, 139 genera, Jan: 139 genera
+nrow(n_magnus@otu_table) #4534 OTUs, 155 genera, 
+nrow(n_magnus1@otu_table)
+n_magnus2<-subset_samples(ps8,t_sp=="N_magnus")
+n_magnus2<-prune_taxa(taxa_sums(n_magnus2)>0, n_magnus2)
 
-zymo<-subset_samples(ps6,t_sp=="zymo")
+zymo<-subset_samples(ps5,t_sp=="zymo")
 zymo<-prune_taxa(taxa_sums(zymo)>0, zymo)
 zymo1<-tax_glom(zymo,taxrank='Genus')
 nrow(zymo@otu_table) #85 OTUS, 9 genera, Jan: 85 OTUS
 nrow(zymo1@otu_table) #Jan: 9 genera
 
+#Subspecies of Microcerotermes
+Mserratus<-subset_samples(m_serratus1,t_sp=="M_serratus")
+MspG<-subset_samples(m_serratus1,t_sp=="M_sp_G")
+Mserratus2<-subset_samples(m_serratus2,t_sp=="M_serratus")
+MspG2<-subset_samples(m_serratus2,t_sp=="M_sp_G")
+
+
 # Microcerotermes
 ord.nmds.bray_micro <- ordinate(m_serratus, method="NMDS", distance="bray")
-m_serratus_plot<-phyloseq::plot_ordination(m_serratus, ord.nmds.bray_micro, color="Site1", title="Bray NMDS")
-m_serratus_plot + stat_ellipse(type="norm", linetype=1) +  theme_bw()
-ordiellipse(m_serratus_plot, groups = "species", display = "sites", kind = "sd", conf = 0.95, col = "black", w = NULL)
-nmds_phyloseq(m_serratus, treatment, method = 'bray', circle = 0.95,
-labels = NULL, colors = 'default', verbose = TRUE)
+m_serratus_plot<-phyloseq::plot_ordination(m_serratus, ord.nmds.bray_micro, color="Site1", title="Microcerotermes Bray NMDS genus")
+m_serratus_plot<-m_serratus_plot + stat_ellipse(type="norm", linetype=1) +  theme_bw()
+#ordiellipse(ord.nmds.bray_micro, groups = "species", display = "sites", kind = "sd", conf = 0.95, col = "black", w = NULL)
+#nmds_phyloseq(m_serratus, treatment, method = 'bray', circle = 0.95,
+#labels = NULL, colors = 'default', verbose = TRUE)
+#try with transformed data
+ord.nmds.bray_micro2 <- ordinate(m_serratus2, method="NMDS", distance="bray")
+phyloseq::plot_ordination(m_serratus2, ord.nmds.bray_micro2, color="Site1", title="Microcerotermes Bray NMDS ps7")
+ord.nmds.bray_micro.tr <- ordinate(m_serratus1, method="NMDS", distance="bray")
+phyloseq::plot_ordination(m_serratus1, ord.nmds.bray_micro.tr, color="Site1", title="Microcerotermes Bray NMDS transformed")+ stat_ellipse(type="norm", linetype=1) +  theme_bw()
 plot_bar_plot(m_serratus,.,Site1,0.005)
 # Higher levels of ruminococcus (breaks down cellulose) in SCL and JCU
 
 #Amitermes
-ord.nmds.bray_ami <- ordinate(a_laurensis, method="NMDS", distance="jaccard")
-phyloseq::plot_ordination(a_laurensis, ord.nmds.bray_ami, color="Site1",shape="Sequencing_group", title="Bray NMDS")#,label="X.NAME")
+ord.nmds.bray_ami <- ordinate(a_laurensis, method="NMDS", distance="bray")
+a_laurensis_plot<-phyloseq::plot_ordination(a_laurensis, ord.nmds.bray_ami, color="Site1", title="Amitermes Bray NMDS genus")+ stat_ellipse(type="norm", linetype=1) +  theme_bw()#,label="X.NAME") #shape="Sequencing_group",
+ord.nmds.bray_ami1 <- ordinate(a_laurensis1, method="NMDS", distance="bray")
+phyloseq::plot_ordination(a_laurensis1, ord.nmds.bray_ami1, color="Site1",shape="Sequencing_group", title="Amitermes Bray NMDS transformed")
 plot_bar_plot(a_laurensis,.,Collection.site,.005)
 
 #Nasutitermes
-ord.nmds.bray_nasu <- ordinate(n_magnus, method="NMDS", distance="jaccard")
-phyloseq::plot_ordination(n_magnus, ord.nmds.bray_nasu, color="Site1",shape="Sequencing_group", title="Bray NMDS")#,label="X.NAME")
+ord.nmds.bray_nasu <- ordinate(n_magnus, method="NMDS", distance="bray")
+n_magnus_plot<-phyloseq::plot_ordination(n_magnus, ord.nmds.bray_nasu, color="Site1", title="Nasutitermes Bray NMDS genus")+ stat_ellipse(type="norm", linetype=1) +  theme_bw()#,label="X.NAME")shape="Sequencing_group",
+ord.nmds.bray_nasu1 <- ordinate(n_magnus1, method="NMDS", distance="bray")
+phyloseq::plot_ordination(n_magnus1, ord.nmds.bray_nasu1, color="Site1",shape="Sequencing_group", title="Nasutitermes Bray NMDS transformed")
 plot_bar_plot(n_magnus,.,Site1,.005)
 
 #Coptotermes
 ord.nmds.bray_copto <- ordinate(c_acinaciformis, method="NMDS", distance="bray")
-phyloseq::plot_ordination(c_acinaciformis, ord.nmds.bray_copto, color="Site1", title="Bray NMDS")#,label="X.NAME")
+c_acinaciformis_plot<-phyloseq::plot_ordination(c_acinaciformis, ord.nmds.bray_copto, color="Site1", title="Coptotermes Bray NMDS genus")+ stat_ellipse(type="norm", linetype=1) +  theme_bw()#,label="X.NAME")
+ord.nmds.bray_copto1 <- ordinate(c_acinaciformis1, method="NMDS", distance="bray")
+phyloseq::plot_ordination(c_acinaciformis1, ord.nmds.bray_copto1, color="Site1", title="Coptotermes Bray NMDS transformed")
 plot_bar_plot(c_acinaciformis,.,Collection.site,.005)
 
 #zymo
 ord.nmds.bray_zymo <- ordinate(zymo, method="NMDS", distance="bray")
 phyloseq::plot_ordination(zymo, ord.nmds.bray_zymo, color="Sequencing_group", title="Bray NMDS",label="X.NAME")
 plot_bar_plot(zymo1,.,Collection.site,0)
+
+multiplot(a_laurensis_plot,m_serratus_plot,n_magnus_plot,c_acinaciformis_plot,cols=2)
 ```
 Test for difference in betadiversity with adonis
 ```{r}
@@ -672,7 +810,7 @@ uniweigh<-phyloseq::distance(ps7, method="wunifrac")
 brayd<-phyloseq::distance(ps7, method="bray")
 jaccd<-phyloseq::distance(ps7, method="jaccard")
 
-p1 = phyloseq::plot_ordination(ps7, ordinate(ps7, method="PCoA", dist="unifrac", weighted=TRUE), type = "samples", color = "t_sp") 
+p1 = phyloseq::plot_ordination(ps7, ordinate(ps7, method="PCoA", dist="wunifrac", weighted=TRUE), type = "samples", color = "t_sp") 
 p1 + geom_point(size = 2) + ggtitle("PCoA Weighted UNIFRAC") #What is happening here? Why are coptotermes and Microcerotermes so close together?
 p1 = phyloseq::plot_ordination(ps7, ordinate(ps7, method="PCoA", dist="unifrac"), type = "samples", color = "t_sp") 
 p1 + geom_point(size = 2) + ggtitle("PCoA Unweighted UNIFRAC") 
@@ -711,8 +849,9 @@ mound_meters<-geodist(df_distance)
 
 #Put in a dataframe, using as.numeric to change to one dimesion and lower.tri to account for mirroring of the matrix and the diagonal:
 dim(uniun)
+dim(brayd)
  
-commdist=as.numeric(uniun[lower.tri(uniun)])
+commdist=as.numeric(brayd[lower.tri(brayd)])
 specdist=as.numeric(specdist[lower.tri(specdist)])
 sampledist=as.numeric(mound_meters[lower.tri(mound_meters)])
 sitedist=as.numeric(sitedist[lower.tri(sitedist)])
@@ -725,8 +864,8 @@ model_df <- data.frame(commdist, specdist, sitedist, sampledist)
 model_df$samespec <- ifelse(model_df$specdist == 0, 'yes', 'no')
 model_df$samesite <- ifelse(model_df$sitedist == 0, 'yes', 'no')
 
-m1 <- lm(commdist ~ samespec * sampledist + samesite, data=model_df)
-summary(m1)
+m1 <- lm(commdist ~ samespec + sampledist + samesite, data=model_df)
+summary(m1) # samespec, sampledist and samesite all negatively coorelated with community distance.
 
 ggplot(model_df,aes(sampledist,commdist)) +geom_point(aes(color=samespec,shape=samesite))
 
@@ -772,29 +911,56 @@ summary(m1) # sample distance is not significant. same site and same species hav
 #bray; all significant
 
 a_model<-distance_phyloseq(a_laurensis1)
-ggplot(a_model,aes(sampledist,commdist)) + geom_point(aes(color=samesite))+ggtitle("Amitermes laurensis") #+stat_summary(fun.data=mean_cl_normal) +
+a_bothsites<-ggplot(a_model,aes(sampledist,commdist)) + geom_point(aes(color=samesite))+ggtitle("Amitermes laurensis")+geom_smooth(method='lm')+theme_classic() #+stat_summary(fun.data=mean_cl_normal) +
    #geom_smooth(method='lm',formula=commdist ~  sampledist *samesite, data=a_model)
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Amitermes_allsites.png")
 m2 <- lm(commdist ~  sampledist *samesite, data=a_model)
-summary(m2) #no significance or interaction with unifrac or bray
+summary(m2) #sample dist and samesiteyes both have a negative correlation with community distance. no significant interaction
+m2b <- lm(commdist ~  sampledist +samesite, data=a_model)
+summary(m2b) #no significance for either
+m2c <- lm(commdist ~  sampledist, data=a_model)
+summary(m2c) #not significant
+m2d <- lm(commdist ~  samesite, data=a_model)
+summary(m2d) # yes significant
+anova(m2,m2b) #not significant
+anova(m2,m2d) 
 
 c_model<-distance_phyloseq(c_acinaciformis1)
-ggplot(c_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("Coptotermes acinaciformis")
+c_bothsites<-ggplot(c_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("Coptotermes acinaciformis")+geom_smooth(method='lm')+theme_classic()
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Coptotermes_allsites.png")
-m3 <- lm(commdist ~  sampledist *samesite, data=c_model)
+m3 <- lm(commdist ~  sampledist +samesite, data=c_model)
 summary(m3) # no significance or interaction
+m3b<-lm(commdist ~  samesite, data=c_model)
+summary(m3b) #yes significant
 
 m_model<-distance_phyloseq(m_serratus1)
-ggplot(m_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("Microcerotermes serratus")
+ggplot(m_model,aes(sampledist,commdist,color=samespec)) +geom_point(aes(shape=samesite))+ggtitle("Microcerotermes serratus")+geom_smooth(method="lm")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_allsites.png")
-m4 <- lm(commdist ~  sampledist*samesite, data=m_model)
+m4 <- lm(commdist ~  sampledist+samesite, data=m_model)
+summary(m4) #sample dist and samesiteyes is negatively associated unifrac and bray and jaccard
+
+ms_model<-distance_phyloseq(Mserratus)
+m1_bothsites<-ggplot(ms_model,aes(sampledist,commdist,shape=samespec)) +geom_point(aes(color=samesite))+ggtitle("Microcerotermes serratus")+geom_smooth(method="lm")+theme_classic()
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_serratus_allsites.png")
+m4s <- lm(commdist ~  sampledist+samesite, data=ms_model)
+summary(m4s) #sample dist and samesiteyes is negatively associated unifrac and bray and jaccard
+m4s <- lm(commdist ~  samesite, data=ms_model)
+summary(m4s) # yes samesite is lower.
+
+mG_model<-distance_phyloseq(MspG)
+m2_bothsites<-ggplot(mG_model,aes(sampledist,commdist,shape=samespec)) +geom_point(aes(shape=samespec,color=samesite))+ggtitle("Microcerotermes sp G")+geom_smooth(method="lm")+theme_classic()
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_spG_allsites.png")
+m4 <- lm(commdist ~  sampledist+samesite, data=m_model)
 summary(m4) #sample dist and samesiteyes is negatively associated unifrac and bray and jaccard
 
 n_model<-distance_phyloseq(n_magnus1)
-ggplot(n_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("Nasutitermes magnus")
+n_bothsites<-ggplot(n_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("Nasutitermes magnus")+geom_smooth(method='lm')+theme_classic()
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Nasutitermes_allsites.png")
-m5 <- lm(commdist ~  sampledist*samesite, data=n_model)
+m5 <- lm(commdist ~  sampledist+samesite, data=n_model)
 summary(m5) #sampledist, samesiteyes have negative association, positive interaction for unifrac and bray.
+
+multiplot(a_bothsites,m1_bothsites,n_bothsites,m2_bothsites,c_bothsites,cols=3)
+ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/multiplot_allsites.png")
 
 # should we make a thing that says same site?
 # All species, just two sites
@@ -803,19 +969,19 @@ pw_sc<-prune_taxa(taxa_sums(pw_sc)>0, pw_sc)
 pw_sc_model<-distance_phyloseq(pw_sc)
 ggplot(pw_sc_model,aes(sampledist,commdist)) +geom_point(aes(color=samespec,shape=samesite))+ggtitle("Only savanna sites")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/allsp_Savanna.png")
-m6 <- lm(commdist ~  sampledist*samesite, data=pw_sc_model)
+m6 <- lm(commdist ~  sampledist+samesite, data=pw_sc_model)
 summary(m6) #all significant unifrac. significant interaction between sample dist and samesite yes lollll
 
 # amitermes each site
 a_pw<-subset_samples(a_laurensis1,Site=="PW")
 a_pw_model<-distance_phyloseq(a_pw)
-ggplot(a_pw_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("PW Amitermes")
+apw_plot<-ggplot(a_pw_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav1 Amitermes")+ geom_smooth(method='lm')
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Amitermes_PW.png")
 m7 <- lm(commdist ~  sampledist, data=a_pw_model)
 summary(m7) # not significant
 a_sc<-subset_samples(a_laurensis1,Site=="SC")
 a_sc_model<-distance_phyloseq(a_sc)
-ggplot(a_sc_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("SC Amitermes")
+asc_plot<-ggplot(a_sc_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav2 Amitermes")+ geom_smooth(method='lm')
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Amitermes_SC.png")
 m8 <- lm(commdist ~  sampledist, data=a_sc_model)
 summary(m8) #not significant
@@ -823,29 +989,31 @@ summary(m8) #not significant
 # nasutitermes each site
 n_pw<-subset_samples(n_magnus1,Site=="PW")
 n_pw_model<-distance_phyloseq(n_pw)
-ggplot(n_pw_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("PW Nasutitermes")
+npw_plot<-ggplot(n_pw_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav1 Nasutitermes")+ geom_smooth(method='lm')
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Nasutitermes_PW.png")
 m9 <- lm(commdist ~  sampledist, data=n_pw_model)
 summary(m9) # yes significant unifrac and jaccard and bray
 n_sc<-subset_samples(n_magnus1,Site=="SC")
 n_sc_model<-distance_phyloseq(n_sc)
-ggplot(n_sc_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("SC Nasutitermes")
+nsc_plot<-ggplot(n_sc_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav2 Nasutitermes")+ geom_smooth(method='lm')
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Nasutitermes_SC.png")
 m10 <- lm(commdist ~  sampledist, data=n_sc_model)
 summary(m10) # not significant
 # coptotermes each site
 c_pw<-subset_samples(c_acinaciformis1,Site=="PW")
 c_pw_model<-distance_phyloseq(c_pw)
-ggplot(c_pw_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("PW Coptotermes")
+cpw_plot<-ggplot(c_pw_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav1 Coptotermes")+ geom_smooth(method='lm')
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Coptotermes_PW.png")
 m11 <- lm(commdist ~  sampledist, data=c_pw_model)
 summary(m11) # not significant
 c_sc<-subset_samples(c_acinaciformis1,Site=="SC")
 c_sc_model<-distance_phyloseq(c_sc)
-ggplot(c_sc_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("SC Coptotermes")
+csc_plot<-ggplot(c_sc_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav2 Coptotermes")+ geom_smooth(method='lm')
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Coptotermes_SC.png")
 m12 <- lm(commdist ~  sampledist, data=c_sc_model)
 summary(m12) #not significant
+multiplot(apw_plot,npw_plot,cpw_plot,asc_plot,nsc_plot,csc_plot,cols=2)
+
 # microcerotermes each site
 m_pw<-subset_samples(m_serratus1,Site=="PW")
 m_pw_model<-distance_phyloseq(m_pw)
@@ -880,7 +1048,10 @@ summary(m17) #not significant with unifrac, but significant with jaccard and bra
 ```
 Heat Map
 ```{r}
-plot_heatmap(ps.bygenus.tr.f, sample.label="t_sp", taxa.label = "Family")
+Phylum_Genus = apply(tax_table(ps.bygenus.tr.f)[, myranks], 1, paste, sep="", collapse=": ")
+# Add concatenated labels as a new rank after strain
+tax_table(ps.bygenus.tr.f) <- cbind(tax_table(ps.bygenus.tr.f), catglab=Phylum_Genus)
+plot_heatmap(ps.bygenus.tr.f, sample.label="t_sp1", taxa.label = "catglab")
 ```
 Scatter plot for each site
 ```{r}
@@ -922,7 +1093,7 @@ phyloseq::plot_ordination(ps.prop_all, ord.nmds.bray_all, color="t_sp", title="B
 
 
 Use Deseq to see which taxa are different between Feeding group
-csv with B are made from ps7. without are from ps.bygenus
+csv with B are made from ps7. without are from ps.bygenus. NOte that those listed as grass could be grass or litter feeding.
 ```{r}
 diagdds=phyloseq_to_deseq2(ps.bygenus,~Feeding_Group)
 # calculate geometric means prior to estimate size factors
@@ -933,17 +1104,18 @@ geoMeans = apply(counts(diagdds), 1, gm_mean)
 # Estimate size factors
 diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
 diagdds = DESeq(diagdds, test="Wald", fitType="local")
-
+alpha = 0.05
 res = results(diagdds, contrast = c("Feeding_Group", "Grass", "Wood"),alpha=alpha)
 #res = results(diagdds, cooksCutoff = FALSE)
 res = res[order(res$padj, na.last=NA), ]
-View(res)
-alpha = 0.05
-#alpha = 1.1
+res
 sigtab = res[(res$padj < alpha), ]
 sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps7)[rownames(sigtab), ], "matrix"))
 View(sigtab)
 write.csv(sigtab,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTaxa_feeding_group_B.csv")
+
+nrow(res) #264
+nrow(ps.bygenus@otu_table) #264
 nrow(sigtab) #3352 total ASV, 114 genera
 ```
 Which taxa are different between subfamilies
@@ -1175,8 +1347,821 @@ write.csv(sigtab_sf,file="~/Box/Clement_TermiteGut_16S_0108/output/deseq/DESeqTa
 nrow(sigtab_sf) #14
 ```
 
-Export biom files for picrust2
+Export biom files for picrust2 from https://www.youtube.com/watch?v=xZ7yc-GKcSk
 ```{r}
+otu<-as(otu_table(ps8),"matrix")
+otu_biom<-make_biom(data=otu)
+write_biom(otu_biom,"~/Box/termite_microbiome/picrust2/otu.biom")
+#also copy ASV_seqs_test_conc.fa, but just the rows that are still in ps8
+fna_file<-readDNAStringSet("~/Box/termite_microbiome/Dada2/Jan2022/ASV_seqs_test_conc.fa")
+fna_filt<-fna_file[rownames(ps8@otu_table),]
+writeXStringSet(fna_filt,"~/Box/termite_microbiome/picrust2/fna_filt.fna",format="fasta")
+# After installing picrust2 on a computer that has at least 16 Ram, run
+# picrust2_pipeline.py -s fna_filt.fna -i otu.biom -o picrust2_out_pipeline -p 4
+```
+
+Identify core microbiome. How many ASVs are shared between all termites? How many are endemic? How many are similar between wood feeders? Upset plots? Occupancy abundance plots
+```{r}
+#https://bioconductor.org/help/course-materials/2017/BioC2017/Day1/Workshops/Microbiome/MicrobiomeWorkflowII.html#using_phyloseq
+table(tax_table(ps8)[, "Phylum"], exclude = NULL)
+abund_prev_plot <- function(ps8) {
+  ps <- subset_taxa(ps8, !is.na(Phylum) & !Phylum %in% c("", "uncharacterized"))
+  # Compute prevalence of each feature, store as data.frame
+  prevdf = apply(X = otu_table(ps),
+                 MARGIN = ifelse(taxa_are_rows(ps), yes = 1, no = 2),
+                 FUN = function(x){sum(x > 0)})
+  # Add taxonomy and total read counts to this data.frame
+  prevdf = data.frame(Prevalence = prevdf,
+                      TotalAbundance = taxa_sums(ps),
+                      tax_table(ps))
+  # Are there taxa that are comprised of mostly low-prevalence features?
+  sum_reads<-sum(prevdf$TotalAbundance)
+ prev_rel<- plyr::ddply(prevdf, "Phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence),sum(df1$TotalAbundance),sum(df1$TotalAbundance)/sum_reads)}) # add total abundance, relative abundance here.
+ #sort by relative abundance column
+ colnames(prev_rel)<-c("Phylum","Avg prevalence","Total prevalence","Total reads","Rel_abundance")
+ prev_rel<-prev_rel[order(-prev_rel$Rel_abundance),]
+ prev_rel$Rel_abundance<-percent(prev_rel$Rel_abundance,accuracy = .1)
+  # Define phyla to filter --ones that are fewer than 100 total prevalence
+  filterPhyla = c("Bdellovibrionota", "Campilobacterota","Chloroflexi","Deferribacterota","MBNT15","Myxococcota","Patescibacteria","WPS-2")
+  # Filter entries with unidentified Phylum.
+  ps_prev = subset_taxa(ps, !Phylum %in% filterPhyla)
+  ps_prev
+  prevdf1 = subset(prevdf, Phylum %in% get_taxa_unique(ps_prev, "Phylum"))
+  #prevdf1 = subset(prevdf, Phylum %in% get_taxa_unique(ps, "Phylum"))
+  ggplot(prevdf1, aes(TotalAbundance, Prevalence / nsamples(ps),color=Phylum)) +
+    # Include a guess for parameter
+    geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2) +  geom_point(size = 2, alpha = 0.7) +
+    scale_x_log10() +  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
+    facet_wrap(~Phylum) + theme(legend.position="none")+ggtitle(ps@sam_data$t_sp1)
+  return(prev_rel)
+  
+}
+abund_prev_plot(ps8)
+abund_prev_plot(m_serratus1)
+abund_prev(a_laurensis1)
+abund_prev(n_magnus1)
+abund_prev(c_acinaciformis1)
+
+```
+Shared taxa
+```{r}
+ps8 <- prune_taxa(taxa_sums(ps7)>0, ps7)
+nrow(ps8@otu_table) 
+count_shared<-function(m_serratus1){
+  # Compute prevalence of each feature, store as data.frame
+  ps<-prune_taxa(taxa_sums(m_serratus1)>0, m_serratus1)
+  prevdf = apply(X = otu_table(ps),
+                 MARGIN = ifelse(taxa_are_rows(ps), yes = 1, no = 2),
+                 FUN = function(x){sum(x > 0)})
+  # Add taxonomy and total read counts to this data.frame
+  prevdf = data.frame(Prevalence = prevdf,
+                      TotalAbundance = taxa_sums(ps))#,
+                      #tax_table(ps))
+  prevdf<-cbind(as(prevdf,"data.frame"),as(tax_table(ps),"matrix"))
+  sum_reads<-sum(prevdf$TotalAbundance)
+  n_samp<-ncol(ps@otu_table)
+  pct_prevalence<-percent(prevdf$Prevalence/n_samp,accuracy = .01)
+  pct_abundance<-percent(prevdf$TotalAbundance/sum_reads,accuracy=.01)
+ prev_rel<- cbind(prevdf,pct_prevalence,pct_abundance)
+ #prev_rel<-prev_rel[order(-prev_rel$TotalAbundance),]
+  # function to calculate number of shared ASVs
+sortedprev<-prevdf[order(-prevdf$Prevalence),]
+ 
+  n1<-nrow(sortedprev[sortedprev$Prevalence==n_samp,]) # How many ASVs are in all the samples?
+  n.75<-nrow(sortedprev[sortedprev$Prevalence>n_samp*.75,])
+  n2<-nrow(sortedprev[sortedprev$Prevalence>n_samp/2,]) # How many ASVs are in 50% the samples?
+  n.25<-nrow(sortedprev[sortedprev$Prevalence>n_samp*.25,])
+  print(paste("Number of samples:",n_samp,", Total ASVs:", length(prevdf$Prevalence>0),", Shared across all:",n1,", Shared across >75%:",n.75,", Shared across >50%:",n2,", Shared across >25%:",n.25))
+  #return(prev_rel)
+  }
+count_shared(ps8) #There are 19017 ASVs in the table. Of these, 0 are prevalent across all 118 samples, 0 are prevalent in >75% of samples, and  9 are prevalent across >50% of samples."
+count_shared(m_serratus1) #There are 4448 ASVs in the table. Of these, 18 are prevalent across all 40 samples, 37 are prevalent in >75% of samples, and  171 are prevalent across >50% of samples."
+count_shared(a_laurensis1) #There are 7652 ASVs in the table. Of these, 8 are prevalent across all 28 samples, 63 are prevalent in >75% of samples, and  191 are prevalent across >50% of samples."
+count_shared(n_magnus1) #There are 4534 ASVs in the table. Of these, 32 are prevalent across all 29 samples, 122 are prevalent in >75% of samples, and  496 are prevalent across >50% of samples."
+count_shared(c_acinaciformis1) #There are 4069 ASVs in the table. Of these, 23 are prevalent across all 22 samples, 121 are prevalent in >75% of samples, and  388 are prevalent across >50% of samples."
+count_shared(Mserratus)
+count_shared(MspG)
+# Now Genus level
+count_shared(ps.bygenus)
+count_shared(a_laurensis)
+count_shared(n_magnus)
+count_shared(c_acinaciformis)
+count_shared(m_serratus)
+count_shared(subset_samples(ps.bygenus,t_sp=="M_sp_G"))
+count_shared(subset_samples(ps.bygenus,t_sp=="M_serratus"))
+ps.byfamily<-tax_glom(ps8,taxrank="Family")
+ps.byorder<-tax_glom(ps8,taxrank="Order")
+ps.byphylum<-tax_glom(ps8,taxrank="Phylum")
+# family level
+count_shared(ps.byfamily)
+count_shared(subset_samples(ps.byfamily,t_sp=="A_laurensis"))
+count_shared(subset_samples(ps.byfamily,t_sp=="N_magnus"))
+count_shared(subset_samples(ps.byfamily,t_sp=="C_acinaciformis"))
+count_shared(subset_samples(ps.byfamily,t_sp1=="Microcerotermes"))
+count_shared(subset_samples(ps.byfamily,t_sp=="M_serratus"))
+count_shared(subset_samples(ps.byfamily,t_sp=="M_sp_G"))
+count_shared(subset_samples(ps.byfamily,t_sp!="C_acinaciformis"))
+count_shared(ps.byorder)
+count_shared(subset_samples(ps.byorder,t_sp=="A_laurensis"))
+count_shared(subset_samples(ps.byorder,t_sp=="N_magnus"))
+count_shared(subset_samples(ps.byorder,t_sp=="C_acinaciformis"))
+count_shared(subset_samples(ps.byorder,t_sp1=="Microcerotermes"))
+count_shared(subset_samples(ps.byorder,t_sp=="M_serratus"))
+count_shared(subset_samples(ps.byorder,t_sp=="M_sp_G"))
+count_shared(subset_samples(ps.byorder,t_sp!="C_acinaciformis"))
+phy1<-count_shared(ps.byphylum)
+phy2<-count_shared(subset_samples(ps.byphylum,t_sp=="A_laurensis"))
+phy2sav1<-count_shared(subset_samples(ps.byphylum,t_sp=="A_laurensis"&Site2=="Sav1"))
+phy3<-count_shared(subset_samples(ps.byphylum,t_sp=="N_magnus"))
+phy4<-count_shared(subset_samples(ps.byphylum,t_sp=="C_acinaciformis"))
+count_shared(subset_samples(ps.byphylum,t_sp1=="Microcerotermes"))
+phy5<-count_shared(subset_samples(ps.byphylum,t_sp=="M_serratus"))
+phy6<-count_shared(subset_samples(ps.byphylum,t_sp=="M_sp_G"))
+count_shared(subset_samples(ps.byphylum,t_sp!="C_acinaciformis")) #all higher termites
+
+# Shared taxa between multiple groups
+
+  shared_compare <- function(ps8,name1, name2, ps.bygenus, ps.byfamily, ps.byorder, ps.byphylum) {
+    count_shared(subset_samples(ps8,t_sp1==name1|t_sp1==name2))
+    count_shared(subset_samples(ps.bygenus,t_sp1==name1|t_sp1==name2))
+    count_shared(subset_samples(ps.byfamily,t_sp1==name1|t_sp1==name2))
+    count_shared(subset_samples(ps.byorder,t_sp1==name1|t_sp1==name2))
+    count_shared(subset_samples(ps.byphylum,t_sp1==name1|t_sp1==name2))
+  }
+name1<-"Microcerotermes";name2<-"Amitermes"
+shared_compare(ps8,name1,name2, ps.bygenus, ps.byfamily, ps.byorder, ps.byphylum)
+name1<-"Nasutitermes";name2<-"Amitermes"
+shared_compare(ps8,name1,name2, ps.bygenus, ps.byfamily, ps.byorder, ps.byphylum)
+name1<-"Microcerotermes";name2<-"Nasutitermes"
+shared_compare(ps8,name1,name2, ps.bygenus, ps.byfamily, ps.byorder, ps.byphylum)
+name1<-"Coptotermes";name2<-"Amitermes"
+shared_compare(ps8,name1,name2, ps.bygenus, ps.byfamily, ps.byorder, ps.byphylum)
+name1<-"Coptotermes";name2<-"Nasutitermes"
+shared_compare(ps8,name1,name2, ps.bygenus, ps.byfamily, ps.byorder, ps.byphylum)
+name1<-"Coptotermes";name2<-"Microcerotermes"
+shared_compare(ps8,name1,name2, ps.bygenus, ps.byfamily, ps.byorder, ps.byphylum)
+# same but just for sav1 and just for sav2
+
+# check 3 at a time
+count_shared(subset_samples(ps.bygenus,t_sp1=="Amitermes"|t_sp1=="Nasutitermes"|t_sp1=="Microcerotermes"))
+count_shared(subset_samples(ps.bygenus,t_sp1=="Amitermes"|t_sp1=="Coptotermes"|t_sp1=="Microcerotermes"))
+count_shared(subset_samples(ps.bygenus,t_sp1=="Amitermes"|t_sp1=="Nasutitermes"|t_sp1=="Coptotermes"))
+count_shared(subset_samples(ps.bygenus,t_sp1=="Coptotermes"|t_sp1=="Nasutitermes"|t_sp1=="Microcerotermes"))
+count_shared(subset_samples(ps.byphylum,t_sp1=="Amitermes"|t_sp1=="Nasutitermes"|t_sp1=="Microcerotermes"))
+# Check at each site
+count_shared(subset_samples(ps8,Site2=="Sav1"))
+count_shared(subset_samples(ps.bygenus,Site2=="Sav1"))
+count_shared(subset_samples(ps.byfamily,Site2=="Sav1"))
+count_shared(subset_samples(ps.byorder,Site2=="Sav1"))
+count_shared(subset_samples(ps.byphylum,Site2=="Sav1"))
+
+count_shared(subset_samples(ps8,Site2=="Sav2"))
+count_shared(subset_samples(ps.bygenus,Site2=="Sav2"))
+count_shared(subset_samples(ps.byfamily,Site2=="Sav2"))
+count_shared(subset_samples(ps.byorder,Site2=="Sav2"))
+count_shared(subset_samples(ps.byphylum,Site2=="Sav2"))
+
+#Each species at each site
+count_shared_sites <- function(ps8) {
+  count_shared(subset_samples(ps8,t_sp1=="Amitermes"&Site2=="Sav1"))
+  count_shared(subset_samples(ps8,t_sp1=="Amitermes"&Site2=="Sav2"))
+  count_shared(subset_samples(ps8,t_sp1=="Nasutitermes"&Site2=="Sav1"))
+  count_shared(subset_samples(ps8,t_sp1=="Nasutitermes"&Site2=="Sav2"))
+  count_shared(subset_samples(ps8,t_sp1=="Coptotermes"&Site2=="Sav1"))
+  count_shared(subset_samples(ps8,t_sp1=="Coptotermes"&Site2=="Sav2"))
+  count_shared(subset_samples(ps8,t_sp1=="Microcerotermes"&Site2=="Sav1"))
+  count_shared(subset_samples(ps8,t_sp1=="Microcerotermes"&Site2=="Sav2"))
+  count_shared(subset_samples(ps8,t_sp1=="Microcerotermes"&Site2=="Scl1"))
+  count_shared(subset_samples(ps8,t_sp1=="Microcerotermes"&Site2=="RftJ"))
+  count_shared(subset_samples(ps8,t_sp1=="Microcerotermes"&Site2=="RftR"))
+}
+#Genus level
+count_shared(subset_samples(ps.bygenus,t_sp1=="Amitermes"&Site2=="Sav1"))
+count_shared(subset_samples(ps.bygenus,t_sp1=="Amitermes"&Site2=="Sav2"))
+count_shared(subset_samples(ps.bygenus,t_sp1=="Nasutitermes"&Site2=="Sav1"))
+count_shared(subset_samples(ps.bygenus,t_sp1=="Nasutitermes"&Site2=="Sav2"))
+count_shared(subset_samples(ps.bygenus,t_sp1=="Coptotermes"&Site2=="Sav1"))
+count_shared(subset_samples(ps.bygenus,t_sp1=="Coptotermes"&Site2=="Sav2"))
+count_shared(subset_samples(ps.bygenus,t_sp1=="Microcerotermes"&Site2=="Sav1"))
+count_shared(subset_samples(ps.bygenus,t_sp1=="Microcerotermes"&Site2=="Sav2"))
+count_shared(subset_samples(ps.bygenus,t_sp1=="Microcerotermes"&Site2=="Scl1"))
+count_shared(subset_samples(ps.bygenus,t_sp1=="Microcerotermes"&Site2=="RftJ"))
+count_shared(subset_samples(ps.bygenus,t_sp1=="Microcerotermes"&Site2=="RftR"))
+# Family level
+count_shared_sites(ps.byfamily)
+# Order level
+count_shared_sites(ps.byorder)
+# Phylum level
+count_shared_sites(ps.byphylum)
+# Genus level between species combos
+count_shared(subset_samples(ps.bygenus,(t_sp1=="Amitermes"|t_sp1=="Nasutitermes")&Site2=="Sav1"))
+count_shared(subset_samples(ps.bygenus,(t_sp1=="Amitermes"|t_sp1=="Microcerotermes")&Site2=="Sav1"))
+count_shared(subset_samples(ps.bygenus,(t_sp1=="Nasutitermes"|t_sp1=="Microcerotermes")&Site2=="Sav1"))
+count_shared(subset_samples(ps.bygenus,(t_sp1=="Amitermes"|t_sp1=="Coptotermes")&Site2=="Sav1"))
+count_shared(subset_samples(ps.bygenus,(t_sp1=="Coptotermes"|t_sp1=="Microcerotermes")&Site2=="Sav1"))
+count_shared(subset_samples(ps.bygenus,(t_sp1=="Nasutitermes"|t_sp1=="Coptotermes")&Site2=="Sav1"))
+count_shared(subset_samples(ps.bygenus,(t_sp1=="Nasutitermes"|t_sp1=="Microcerotermes"|t_sp1=="Amitermes")&Site2=="Sav1"))
+#Sav2
+count_shared(subset_samples(ps.bygenus,(t_sp1=="Amitermes"|t_sp1=="Nasutitermes")&Site2=="Sav2"))
+count_shared(subset_samples(ps.bygenus,(t_sp1=="Amitermes"|t_sp1=="Microcerotermes")&Site2=="Sav2"))
+count_shared(subset_samples(ps.bygenus,(t_sp1=="Nasutitermes"|t_sp1=="Microcerotermes")&Site2=="Sav2"))
+count_shared(subset_samples(ps.bygenus,(t_sp1=="Amitermes"|t_sp1=="Coptotermes")&Site2=="Sav2"))
+count_shared(subset_samples(ps.bygenus,(t_sp1=="Coptotermes"|t_sp1=="Microcerotermes")&Site2=="Sav2"))
+count_shared(subset_samples(ps.bygenus,(t_sp1=="Nasutitermes"|t_sp1=="Coptotermes")&Site2=="Sav2"))
+count_shared(subset_samples(ps.bygenus,(t_sp1=="Nasutitermes"|t_sp1=="Microcerotermes"|t_sp1=="Amitermes")&Site2=="Sav2"))
+
+```
+Upset plot to show overlap in genera
+```{r}
+library(UpSetR) #https://www.r-graph-gallery.com/upset-plot.html
+input75<-c(Amitermes = 65, Nasutitermes = 48, Coptotermes = 54, Microcerotermes = 40, "Amitermes&Nasutitermes"=44, "Amitermes&Microcerotermes"=34,"Amitermes&Coptotermes"=34,"Nasutitermes&Microcerotermes"=37,"Nasutitermes&Coptotermes"=30,"Microcerotermes&Coptotermes"=26,"Amitermes&Nasutitermes&Coptotermes"=30,"Amitermes&Nasutitermes&Microcerotermes"=37,"Nasutitermes&Microcerotermes&Coptotermes"=33,"Amitermes&Microcerotermes&Coptotermes"=30,"Amitermes&Microcerotermes&Coptotermes&Nasutitermes"=36)
+input<-c(Amitermes = 31, Nasutitermes = 17, Coptotermes = 33, Microcerotermes = 12, "Amitermes&Nasutitermes"=8, "Amitermes&Microcerotermes"=7,"Amitermes&Coptotermes"=15,"Nasutitermes&Microcerotermes"=6,"Nasutitermes&Coptotermes"=8,"Microcerotermes&Coptotermes"=5,"Amitermes&Nasutitermes&Coptotermes"=7,"Amitermes&Nasutitermes&Microcerotermes"=4,"Nasutitermes&Microcerotermes&Coptotermes"=3,"Amitermes&Microcerotermes&Coptotermes"=5,"Amitermes&Microcerotermes&Coptotermes&Nasutitermes"=3)
+upset(fromExpression(input), 
+      nintersects = 40, 
+      nsets = 6, 
+      order.by = "freq", 
+      decreasing = T, 
+      mb.ratio = c(0.6, 0.4),
+      number.angles = 0, 
+      text.scale = 1.1, 
+      point.size = 2.8, 
+      line.size = 1
+      )
+
+
+dim(sets)
+# Prep the data for a Venn diagram https://www.littlemissdata.com/blog/set-analysis
+
+#Note that if you need to move around the labels so that they are not overlapping, you can use the new line breaks like the example below.
+#v$labels <- c("TTC", "Walk", "Drive", "Cycle\n\n\n", "\nTaxi", "Community Ride", "Wheel Trans", "Friends")
+
+#Merge samples to do this
+ps8@sam_data$sp_habitat<-paste(ps8@sam_data$t_sp,ps8@sam_data$Site2)
+merged_by_ss.phy = merge_samples(ps8, "sp_habitat")
+ps.byphylum@sam_data$sp_habitat<-paste(ps.byphylum@sam_data$t_sp,ps.byphylum@sam_data$Site2)
+merged_by_ss.phylum = merge_samples(ps.byphylum, "sp_habitat")
+merged_by_ss.df <-as.data.frame(t(merged_by_ss.phy@otu_table))
+dim(merged_by_ss.df)
+merged_by_ss.df[merged_by_ss.df>0]<-1 #convert table to presence/absence
+merged_by_ss.df$ASV<-rownames(merged_by_ss.df)
+vennMerged <- merged_by_ss.df %>%
+          gather(SpeciesSite, binary,1:11) %>% # take all binary mappings and convert to be a the set indicator
+          filter(binary == 1) %>% # only include set matches
+          select(ASV,SpeciesSite) %>% # only include ID and set category
+          mutate(SpeciesSite = factor(SpeciesSite))
+v <- venneuler(data.frame(vennMerged))
+
+plot(v, main = "Shared ASV prevalence across species and sites", cex.main = 1)
+upset_ASV<-upset(merged_by_ss.df,
+  nsets = 11, number.angles = 30, point.size = 3.5, line.size = 2, order.by = "freq", 
+      decreasing = T,
+  mainbar.y.label = "Shared ASV prevalence across species and sites", sets.x.label = "Total ASVs"
+)
+ggsave("~/Box/termite_microbiome/Figures/UpsetPlot_ASV.png",height = 10,width=15)
+
+# Now do the same but at the genus level
+ps.bygenus@sam_data$sp_habitat<-paste(ps.bygenus@sam_data$t_sp,ps.bygenus@sam_data$Site2)
+merged_by_ss.genus = merge_samples(ps.bygenus, "sp_habitat")
+merged_by_ss.df.genus <-as.data.frame(t(merged_by_ss.genus@otu_table))
+dim(merged_by_ss.df.genus) #264x11
+table_merge<-cbind(tax_table(merged_by_ss.genus),t(otu_table(merged_by_ss.genus)))
+write.csv(table_merge,file="~/Box/termite_microbiome/Dada2/Jan2022/table_tax_merged_genus.csv")
+
+merged_by_ss.df.genus[merged_by_ss.df.genus>0]<-1 #convert table to presence/absence
+merged_by_ss.df.genus$ASV<-rownames(merged_by_ss.df.genus)
+vennMerged <- merged_by_ss.df.genus %>%
+          gather(SpeciesSite, binary,1:11) %>% # take all binary mappings and convert to be a the set indicator
+          filter(binary == 1) %>% # only include set matches
+          select(ASV,SpeciesSite) %>% # only include ID and set category
+          mutate(SpeciesSite = factor(SpeciesSite))
+v <- venneuler(data.frame(vennMerged))
+
+plot(v, main = "Shared genera prevalence across species and sites", cex.main = 1)
+upset_genus<-upset(merged_by_ss.df.genus,
+  nsets = 11, number.angles = 30, point.size = 3.5, line.size = 2, order.by = "freq", 
+      decreasing = T,
+  mainbar.y.label = "Shared genera prevalence across species and sites", sets.x.label = "Total genera"
+)
+ggsave("~/Box/termite_microbiome/Figures/UpsetPlot_genus.png",height = 10,width=15)
+```
+
+How many species in each site?
+```{r}
+Sav1<-ps8@sam_data[ps8@sam_data$Site2=="Sav1",]
+table(Sav1$t_sp)
+sav1<-metadata[metadata$Site=="PW",]
+table(sav1$t_sp)
+Sav2<-ps8@sam_data[ps8@sam_data$Site2=="Sav2",]
+table(Sav2$t_sp)
+sav2<-metadata[metadata$Site=="SC",]
+table(sav2$t_sp)
+table(ps8@sam_data$Site2[ps8@sam_data$t_sp=="M_sp_G"])
+```
+
+Genus level DESEQ between species at different sites
+```{r}
+
+deseq_seqtab <- function(a_laurensis, Site2,fsite1,fsite2) {
+  diagdds=phyloseq_to_deseq2(a_laurensis,~Site2)
+  # calculate geometric means prior to estimate size factors
+  geoMeans = apply(counts(diagdds), 1, gm_mean)
+  # Estimate size factors
+  diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
+  diagdds = DESeq(diagdds, test="Wald", fitType="local")
+  alpha=.05
+  res = results(diagdds, contrast = c("Site2",fsite1,fsite2),alpha=alpha)
+  res = res[order(res$padj, na.last=NA), ]
+  res
+  sigtab = res[(res$padj < alpha), ]
+  sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps7)[rownames(sigtab), ], "matrix")) #add taxonomy
+  return(sigtab)
+}
+sigtab_sav_genus<-deseq_seqtab(ps.bygenus,Site2,"Sav1","Sav2")
+nrow(sigtab_sav_genus)
+
+sigtab_A<-deseq_seqtab(a_laurensis,Site2,"Sav1","Sav2")
+nrow(sigtab_A)
+write.csv(sigtab_A,file="~/Box/termite_microbiome/DESEQ/DESeqTaxa_Ami_genus.csv")
+sigtab_N<-deseq_seqtab(n_magnus,Site2,"Sav1","Sav2")
+nrow(sigtab_N)
+write.csv(sigtab_N,file="~/Box/termite_microbiome/DESEQ/DESeqTaxa_Nas_genus.csv")
+sigtab_C<-deseq_seqtab(c_acinaciformis,Site2,"Sav1","Sav2")
+nrow(sigtab_C)
+write.csv(sigtab_C,file="~/Box/termite_microbiome/DESEQ/DESeqTaxa_Cop_genus.csv")
+sigtab_M<-deseq_seqtab(m_serratus,Site2,"Sav1","Sav2")
+nrow(sigtab_M)
+write.csv(sigtab_M,file="~/Box/termite_microbiome/DESEQ/DESeqTaxa_Mic_sav1_sav2_genus.csv")
+sigtab_M2<-deseq_seqtab(m_serratus,Site2,"Sav1","Scl1")
+nrow(sigtab_M2)
+write.csv(sigtab_M2,file="~/Box/termite_microbiome/DESEQ/DESeqTaxa_Mic_sav1_scl1_genus.csv")
+sigtab_M3<-deseq_seqtab(m_serratus,Site2,"Sav1","RftJ")
+nrow(sigtab_M3)
+sigtab_M4<-deseq_seqtab(m_serratus,Site2,"Sav1","RftR")
+nrow(sigtab_M4)
+sigtab_M5<-deseq_seqtab(m_serratus,Site2,"Scl1","RftJ")
+nrow(sigtab_M5)
+sigtab_M6<-deseq_seqtab(m_serratus,Site2,"Scl1","RftR")
+nrow(sigtab_M6)
+sigtab_M7<-deseq_seqtab(m_serratus,Site2,"RftJ","RftR")
+nrow(sigtab_M7)
+sigtab_M8<-deseq_seqtab(m_serratus,Site2,"Sav2","Scl1")
+nrow(sigtab_M8)
+sigtab_M9<-deseq_seqtab(m_serratus,Site2,"Sav2","RftJ")
+nrow(sigtab_M9)
+sigtab_M10<-deseq_seqtab(m_serratus,Site2,"Sav2","RftR")
+nrow(sigtab_M10)
+
+# ASV level differences
+sigtab_sav<-deseq_seqtab(ps8,Site2,"Sav1","Sav2")
+nrow(sigtab_sav)
+
+sigtab_A2<-deseq_seqtab(a_laurensis2,Site2,"Sav1","Sav2")
+nrow(sigtab_A2)
+write.csv(sigtab_A2,file="~/Box/termite_microbiome/DESEQ/DESeqTaxa_Ami_ASV.csv")
+sigtab_N2<-deseq_seqtab(n_magnus2,Site2,"Sav1","Sav2")
+nrow(sigtab_N2)
+write.csv(sigtab_N2,file="~/Box/termite_microbiome/DESEQ/DESeqTaxa_Nas_ASV.csv")
+sigtab_C2<-deseq_seqtab(c_acinaciformis2,Site2,"Sav1","Sav2")
+nrow(sigtab_C2)
+write.csv(sigtab_C2,file="~/Box/termite_microbiome/DESEQ/DESeqTaxa_Cop_ASV.csv")
+sigtab2_M<-deseq_seqtab(m_serratus2,Site2,"Sav1","Sav2")
+nrow(sigtab2_M)
+write.csv(sigtab2_M,file="~/Box/termite_microbiome/DESEQ/DESeqTaxa_Mic_sav1_sav2_ASV.csv")
+sigtab2_M2<-deseq_seqtab(m_serratus2,Site2,"Sav1","Scl1")
+nrow(sigtab2_M2)
+write.csv(sigtab2_M2,file="~/Box/termite_microbiome/DESEQ/DESeqTaxa_Mic_sav1_scl1_ASV.csv")
+sigtab2_M3<-deseq_seqtab(m_serratus2,Site2,"Sav1","RftJ")
+nrow(sigtab2_M3)
+sigtab2_M4<-deseq_seqtab(m_serratus2,Site2,"Sav1","RftR")
+nrow(sigtab2_M4)
+sigtab2_M5<-deseq_seqtab(m_serratus2,Site2,"Scl1","RftJ")
+nrow(sigtab2_M5)
+sigtab2_M6<-deseq_seqtab(m_serratus2,Site2,"Scl1","RftR")
+nrow(sigtab2_M6)
+sigtab2_M7<-deseq_seqtab(m_serratus2,Site2,"RftJ","RftR")
+nrow(sigtab2_M7)
+sigtab2_M8<-deseq_seqtab(m_serratus2,Site2,"Sav2","Scl1")
+nrow(sigtab2_M8)
+sigtab2_M9<-deseq_seqtab(m_serratus2,Site2,"Sav2","Rft")
+nrow(sigtab2_M9)
+sigtab2_M10<-deseq_seqtab(m_serratus2,Site2,"Sav2","RftR")
+nrow(sigtab2_M10)
+
+#new function for feeding group
+deseq_seqtab_feed <- function(a_laurensis, Feeding_Group) {
+  diagdds=phyloseq_to_deseq2(a_laurensis,~Feeding_Group)
+  # calculate geometric means prior to estimate size factors
+  geoMeans = apply(counts(diagdds), 1, gm_mean)
+  # Estimate size factors
+  diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
+  diagdds = DESeq(diagdds, test="Wald", fitType="local")
+  alpha=.05
+  res = results(diagdds, contrast = c("Feeding_Group","Wood","Grass"),alpha=alpha)
+  res = res[order(res$padj, na.last=NA), ]
+  res
+  sigtab = res[(res$padj < alpha), ]
+  sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps7)[rownames(sigtab), ], "matrix")) #add taxonomy, take off this line if you are doing function
+  return(sigtab)
+}
+
+
+sigtab_feed_genus<-deseq_seqtab_feed(ps.bygenus,Feeding_group)
+nrow(sigtab_feed_genus)
+head(sigtab_feed_genus[order(-sigtab_feed_genus$baseMean),c(1,2,5,6,8,12)],10)
+sigtab_feed<-deseq_seqtab_feed(ps8,Feeding_group)
+nrow(sigtab_feed)
+sigtab_feed3<-deseq_seqtab_feed(ps9,Feeding_group)
+nrow(sigtab_feed3)
+head(sigtab_feed3[order(-sigtab_feed3$log2FoldChange),c(1,2,5,6)],10)
+```
+
+DESEQ with EC instead of genus
+```{r}
+  EC_table<-read.table("~/Box/termite_microbiome/picrust2/picrust2_out_pipeline/pathways_out/path_abun_unstrat.tsv",row.names=1, header=T)
+nrow(EC_table) #423 pathways
+tax9<-cbind(rownames(EC_table),rownames(EC_table))
+colnames(tax9)<-c("Name","EC")
+tax9<-as.data.frame(tax9)
+row.names(tax9)<-tax9$Name
+ps9<-phyloseq(sample_data(ps8@sam_data),tax_table(as.matrix(tax9)), otu_table(EC_table, taxa_are_rows = TRUE))
+
+ord.nmds.bray_fun<- ordinate(ps9, method="NMDS", distance="bray")
+phyloseq::plot_ordination(ps9, ord.nmds.bray_fun, color="t_sp",shape="Site2", title="Bray NMDS Pathway")+   theme_bw()#stat_ellipse(type="norm", linetype=1) +
+
+# Subset these
+a_laurensis3<-subset_samples(ps9,t_sp1=="Amitermes") #with whole data
+a_laurensis3<-prune_taxa(taxa_sums(a_laurensis3)>0, a_laurensis3)
+nrow(a_laurensis3@otu_table)
+n_magnus3<-subset_samples(ps9,t_sp1=="Nasutitermes") #with whole data
+n_magnus3<-prune_taxa(taxa_sums(n_magnus3)>0, n_magnus3)
+nrow(n_magnus3@otu_table)
+c_acinaciformis3<-subset_samples(ps9,t_sp1=="Coptotermes") #with whole data
+c_acinaciformis3<-prune_taxa(taxa_sums(c_acinaciformis3)>0, c_acinaciformis3)
+nrow(c_acinaciformis3@otu_table)
+m_serratus3<-subset_samples(ps9,t_sp1=="Microcerotermes") #with whole data
+m_serratus3<-prune_taxa(taxa_sums(m_serratus3)>0, m_serratus3)
+nrow(m_serratus3@otu_table)
+mserratus3<-subset_samples(m_serratus3,t_sp=="M_serratus")
+nrow(prune_taxa(taxa_sums(mserratus3)>0, mserratus3)@otu_table)
+mspG3<-subset_samples(m_serratus3,t_sp=="M_sp_G")
+nrow(prune_taxa(taxa_sums(mspG3)>0, mspG3)@otu_table)
+
+savs<-subset_samples(ps8,Habitat=="Savanna")
+nrow(prune_taxa(taxa_sums(savs)>0, savs)@otu_table)
+savs_genus<-subset_samples(ps.bygenus,Habitat=="Savanna")
+nrow(prune_taxa(taxa_sums(savs_genus)>0, savs_genus)@otu_table)
+savs3<-subset_samples(ps9,Habitat=="Savanna")
+nrow(prune_taxa(taxa_sums(savs3)>0, savs3)@otu_table)
+sigtab_sav3<-deseq_seqtab(ps9,Site2,"Sav1","Sav2")
+nrow(sigtab_sav3)
+
+sigtab_A3<-deseq_seqtab(a_laurensis3,Site2,"Sav1","Sav2")
+nrow(sigtab_A3)
+sigtab_A3[,c(1,2,5,6)]
+write.csv(sigtab_A3,file="~/Box/termite_microbiome/DESEQ/DESeqTaxa_Ami_fun.csv")
+sigtab_N3<-deseq_seqtab(n_magnus3,Site2,"Sav1","Sav2")
+nrow(sigtab_N3)
+head(sigtab_N3[order(-sigtab_N3$baseMean),c(1,2,5,6)],10)
+write.csv(sigtab_N3,file="~/Box/termite_microbiome/DESEQ/DESeqTaxa_Nas_fun.csv")
+sigtab_C3<-deseq_seqtab(c_acinaciformis3,Site2,"Sav1","Sav2")
+nrow(sigtab_C3)
+write.csv(sigtab_C3,file="~/Box/termite_microbiome/DESEQ/DESeqTaxa_Cop_fun.csv")
+sigtab3_M<-deseq_seqtab(m_serratus3,Site2,"Sav1","Sav2")
+nrow(sigtab3_M)
+write.csv(sigtab3_M,file="~/Box/termite_microbiome/DESEQ/DESeqTaxa_Mic_sav1_sav2_fun.csv")
+sigtab3_M2<-deseq_seqtab(m_serratus3,Site2,"Sav1","Scl1")
+nrow(sigtab3_M2)
+head(sigtab3_M2[order(-sigtab3_M2$baseMean),c(1,2,5,6)],10)
+write.csv(sigtab3_M2,file="~/Box/termite_microbiome/DESEQ/DESeqTaxa_Mic_sav1_scl1_fun.csv")
+sigtab3_M3<-deseq_seqtab(m_serratus3,Site2,"Sav1","RftJ")
+nrow(sigtab3_M3)
+sigtab3_M4<-deseq_seqtab(m_serratus3,Site2,"Sav1","RftR")
+nrow(sigtab3_M4)
+sigtab3_M5<-deseq_seqtab(m_serratus3,Site2,"Scl1","RftJ")
+nrow(sigtab3_M5)
+sigtab3_M6<-deseq_seqtab(m_serratus3,Site2,"Scl1","RftR")
+nrow(sigtab3_M6)
+sigtab3_M7<-deseq_seqtab(m_serratus3,Site2,"RftJ","RftR")
+nrow(sigtab3_M7)
+sigtab3_M8<-deseq_seqtab(m_serratus3,Site2,"Sav2","Scl1")
+nrow(sigtab3_M8)
+sigtab3_M9<-deseq_seqtab(m_serratus3,Site2,"Sav2","RftJ")
+nrow(sigtab3_M9)
+sigtab3_M10<-deseq_seqtab(m_serratus3,Site2,"Sav2","RftR")
+nrow(sigtab3_M10)
+
+
+
+#Upset plot
+ps9@sam_data$sp_habitat<-paste(ps9@sam_data$t_sp,ps9@sam_data$Site2)
+merged_by_ss.fun = merge_samples(ps9, "sp_habitat")
+merged_by_ss.df_fun <-as.data.frame(t(merged_by_ss.fun@otu_table))
+dim(merged_by_ss.df_fun) #264x11
+merged_by_ss.df_fun[merged_by_ss.df_fun>0]<-1 #convert table to presence/absence
+merged_by_ss.df_fun$ASV<-rownames(merged_by_ss.df_fun)
+vennMerged_fun <- merged_by_ss.df_fun %>%
+          gather(SpeciesSite, binary,1:11) %>% # take all binary mappings and convert to be a the set indicator
+          filter(binary == 1) %>% # only include set matches
+          select(ASV,SpeciesSite) %>% # only include ID and set category
+          mutate(SpeciesSite = factor(SpeciesSite))
+v <- venneuler(data.frame(vennMerged_fun))
+
+plot(v, main = "Shared pathways across species and sites", cex.main = 1)
+upset_fun<-upset(merged_by_ss.df_fun,
+  nsets = 11, number.angles = 30, point.size = 3.5, line.size = 2, order.by = "freq", 
+      decreasing = T,
+  mainbar.y.label = "Shared function prevalence across species and sites", sets.x.label = "Total EC functions"
+)
+```
+
+Three barplots on top of each other https://jokergoo.github.io/ComplexHeatmap-reference/book/upset-plot.html
+```{r}
+#BiocManager::install("ComplexHeatmap")
+m<-make_comb_mat(merged_by_ss.df,top_n_sets = 11)
+m = m[comb_degree(m) > 0]
+UpSet(m[comb_size(m) >= 30],set_order =NULL,comb_order = order(-comb_size(m[comb_size(m) >= 30])))
+
+#by genus
+m1<-make_comb_mat(merged_by_ss.df.genus,top_n_sets = 11)
+m1 = m1[comb_degree(m1) > 0]
+UpSet(m1[comb_size(m1) >= 2],set_order =NULL,comb_order = order(-comb_size(m1[comb_size(m1) >= 2])))
+
+# By function
+m2<-make_comb_mat(merged_by_ss.df_fun,top_n_sets = 11)
+m2 = m2[comb_size(m2) >= 10]
+ht<-UpSet(m2,set_order =NULL,comb_order = order(-comb_size(m2)),top_annotation = HeatmapAnnotation(
+        "Intersection size" = anno_barplot(comb_size(m2), 
+            ylim = c(0, max(comb_size(m2))*1.1),
+            border = FALSE, 
+            gp = gpar(fill = "black"), 
+            height = unit(4, "cm")
+        )))
+ht = draw(ht)
+od = column_order(ht)
+decorate_annotation("Intersections", {
+    grid.text(comb_size(m2)[od], x = seq_along(comb_size(m2)), y = unit(comb_size(m2)[od], "native") + unit(2, "pt"), 
+        default.units = "native", just = c("left", "bottom"), 
+        gp = gpar(fontsize = 6, col = "#404040"), rot = 45)
+})
 
 ```
 
+DESEQ by phylum
+```{r}
+nrow(ps.byphylum@otu_table)
+sav_phylum<-subset_samples(ps.byphylum,Habitat=="Savanna")
+nrow(prune_taxa(taxa_sums(sav_phylum)>0, sav_phylum)@otu_table)
+a_laurensis_phylum<-subset_samples(ps.byphylum,t_sp1=="Amitermes")
+nrow(prune_taxa(taxa_sums(a_laurensis_phylum)>0, a_laurensis_phylum)@otu_table)
+n_magnus_phylum<-subset_samples(ps.byphylum,t_sp1=="Nasutitermes")
+nrow(prune_taxa(taxa_sums(n_magnus_phylum)>0, n_magnus_phylum)@otu_table)
+c_acinaciformis_phylum<-subset_samples(ps.byphylum,t_sp1=="Coptotermes")
+nrow(prune_taxa(taxa_sums(c_acinaciformis_phylum)>0, c_acinaciformis_phylum)@otu_table)
+m_serratus_phylum<-subset_samples(ps.byphylum,t_sp1=="Microcerotermes")
+nrow(prune_taxa(taxa_sums(m_serratus_phylum)>0, m_serratus_phylum)@otu_table)
+mserratus_phylum<-subset_samples(ps.byphylum,t_sp=="M_serratus")
+nrow(prune_taxa(taxa_sums(mserratus_phylum)>0, mserratus_phylum)@otu_table)
+mspG_phylum<-subset_samples(ps.byphylum,t_sp=="M_sp_G")
+nrow(prune_taxa(taxa_sums(mspG_phylum)>0, mspG_phylum)@otu_table)
+
+# now do DESEQ
+sigtab_feed_phylum<-deseq_seqtab_feed(ps.byphylum,Feeding_group)
+nrow(sigtab_feed_phylum)
+sigtab_feed_phylum[,c("Phylum","log2FoldChange")]
+sigtab_sav_phylum<-deseq_seqtab(ps.byphylum,Site2,"Sav1","Sav2")
+nrow(sigtab_sav_phylum)
+sigtab_sav_phylum[,c("Phylum","log2FoldChange")]
+sigtab_A_phylum<-deseq_seqtab(a_laurensis_phylum,Site2,"Sav1","Sav2")
+nrow(sigtab_A_phylum)
+sigtab_N_phylum<-deseq_seqtab(n_magnus_phylum,Site2,"Sav1","Sav2")
+nrow(sigtab_N_phylum)
+sigtab_C_phylum<-deseq_seqtab(c_acinaciformis_phylum,Site2,"Sav1","Sav2")
+nrow(sigtab_C_phylum)
+sigtab_M_phylum<-deseq_seqtab(mserratus_phylum,Site2,"Sav1","Sav2")
+nrow(sigtab_M_phylum)
+sigtab_M1_phylum<-deseq_seqtab(m_serratus_phylum,Site2,"Sav1","Scl1")
+nrow(sigtab_M1_phylum)
+sigtab_M2_phylum<-deseq_seqtab(m_serratus_phylum,Site2,"Sav1","RftJ")
+nrow(sigtab_M2_phylum)
+sigtab_M3_phylum<-deseq_seqtab(m_serratus_phylum,Site2,"Sav1","RftR")
+nrow(sigtab_M3_phylum)
+sigtab_M4_phylum<-deseq_seqtab(m_serratus_phylum,Site2,"Scl1","RftJ")
+nrow(sigtab_M4_phylum)
+sigtab_M5_phylum<-deseq_seqtab(m_serratus_phylum,Site2,"Scl1","RftR")
+nrow(sigtab_M5_phylum)
+sigtab_M6_phylum<-deseq_seqtab(m_serratus_phylum,Site2,"RftR","RftJ")
+nrow(sigtab_M6_phylum)
+sigtab_M6_phylum<-deseq_seqtab(m_serratus_phylum,Site2,"RftR","RftJ")
+nrow(sigtab_M6_phylum)
+sigtab_M7_phylum<-deseq_seqtab(m_serratus_phylum,Site2,"Sav2","Scl1")
+nrow(sigtab_M7_phylum)
+sigtab_M8_phylum<-deseq_seqtab(m_serratus_phylum,Site2,"Sav2","RftJ")
+nrow(sigtab_M8_phylum)
+sigtab_M9_phylum<-deseq_seqtab(m_serratus_phylum,Site2,"Sav2","RftR")
+nrow(sigtab_M9_phylum)
+
+```
+Make plot of genus based on merged samples
+```{r}
+ps.any.tr <- transform_sample_counts(merged_by_ss.phylum, function (x) x / sum(x))
+keep_percent<-.005
+ps.any.f <- filter_taxa(ps.any.tr, function (x) mean(x) > keep_percent, TRUE) 
+  patho.by_any_plot <- plot_bar(ps.any.f, "Sample", "Abundance", 'Phylum', labs(y="Relative Abundance", title = "Phylum-level assignments"))
+  ps.by_phylum_plot <- patho.by_any_plot + 
+    theme_classic() + 
+    #facet_wrap(~t_sp1, scales="free_x")+
+    facet_grid( .~ t_sp, scales = "free", space = "free") + 
+    theme(legend.key.size = unit(.2, "cm")) + 
+    guides(fill=guide_legend(ncol=1,byrow=TRUE)) +
+    theme(axis.text.x = element_text(angle = 90, vjust=0.5, hjust=0))+
+    #scale_fill_discrete(name="t_sp")+
+    ggtitle("")+ ylab("Relative Abundance")+xlab("")
+  ps.by_phylum_plot 
+  ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/MPS.merged_by_phylum_0.005.pdf", ps.by_phylum_plot)
+#
+# Same but with Genus
+ps.any.tr <- transform_sample_counts(merged_by_ss.genus, function (x) x / sum(x))
+keep_percent<-.005
+ps.any.f <- filter_taxa(ps.any.tr, function (x) mean(x) > keep_percent, TRUE) 
+  patho.by_any_plot <- plot_bar(ps.any.f, "Sample", "Abundance", 'Genus', labs(y="Relative Abundance", title = "Genus-level assignments"))
+  ps.by_genus_plot <- patho.by_any_plot + 
+    theme_classic() + 
+    #facet_wrap(~t_sp1, scales="free_x")+
+    facet_grid( .~ t_sp, scales = "free", space = "free") + 
+    theme(legend.key.size = unit(.2, "cm")) + 
+    guides(fill=guide_legend(ncol=1,byrow=TRUE)) +
+    theme(axis.text.x = element_text(angle = 90, vjust=0.5, hjust=0))+
+    ylab("Relative Abundance")+xlab("")+
+    #scale_fill_discrete(name="t_sp")+
+    ggtitle("")
+  ps.by_genus_plot 
+  ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/MPS.merged_by_genus_0.005.pdf", ps.by_phylum_plot)
+  multiplot(ps.by_phylum_plot,ps.by_genus_plot)
+```
+Bar plot with common Pathways?
+```{r}
+
+ps.any.tr <- transform_sample_counts(ps9, function (x) x / sum(x))
+keep_percent<-.008
+ps.any.f <- filter_taxa(ps.any.tr, function (x) mean(x) > keep_percent, TRUE) 
+  patho.by_any_plot <- plot_bar(ps.any.f, "Sample", "Abundance","EC")
+  ps.by_fun_plot <- patho.by_any_plot + 
+    theme_classic() + 
+    #facet_wrap(~t_sp1, scales="free_x")+
+    facet_grid( .~ t_sp, scales = "free", space = "free") + 
+    theme(legend.key.size = unit(.2, "cm")) + 
+    guides(fill=guide_legend(ncol=1,byrow=TRUE)) +
+    theme(axis.text.x = element_text(angle = 90, vjust=0.5, hjust=0))+
+    ylab("Relative Abundance")+xlab("")+
+    #scale_fill_discrete(name="t_sp")+
+    ggtitle("Pathways")
+  ps.by_fun_plot 
+```
+
+Next analyses: Look specifically at the archaea to see what's happening there.
+```{r}
+ps_arch<-subset_taxa(ps.bygenus.tr, Kingdom=="Archaea" )
+# add a label here that includes both phylum and genus
+myranks = c("Phylum", "Genus")
+Phylum_Genus = apply(tax_table(ps_arch)[, myranks], 1, paste, sep="", collapse=": ")
+# Add concatenated labels as a new rank after strain
+tax_table(ps_arch) <- cbind(tax_table(ps_arch), catglab=Phylum_Genus)
+#add the sp_habitat category and merge samples
+ps_arch@sam_data$sp_habitat<-paste(ps_arch@sam_data$t_sp,ps_arch@sam_data$Site2)
+merged_by_ss.archaea = merge_samples(ps_arch, "sp_habitat")
+
+
+arch_plot<-plot_bar(merged_by_ss.archaea,"Sample", "Abundance",fill="catglab")
+arch_plot+ylab("Relative Abundance")+xlab("")+facet_grid( .~ t_sp1, scales = "free", space = "free")+theme_classic() +
+    theme(axis.text.x = element_text(angle = 90, vjust=0.5, hjust=0))+labs(fill="Phylum: Genus")
+```
+
+```{r}
+# heat map
+ps.bygenus.tr.f@sam_data$sp_habitat<-paste(ps.bygenus.tr.f@sam_data$t_sp,ps.bygenus.tr.f@sam_data$Site2)
+#sampleOrder = unique(sample_names(ps.bygenus.tr.f))
+# sort taxa
+#devtools::install_github("david-barnett/microViz@0.9.0")
+#library(microViz)
+ps.bygenus.tr.f %>%
+  tax_sort(by = "name", at = "Phylum") %>%
+  tax_table() %>%
+  head(30)
+taxaOrder = unique(taxa_names(ps.bygenus.tr.f[order(ps.bygenus.tr.f@tax_table),]))
+plot_heatmap(ps.bygenus.tr.f, sample.label="sp_habitat", sample.order="t_sp", taxa.label = "catglab",low="#66CCFF",high="#000033",taxa.order=taxaOrder)
+
+```
+# make cladogram of similarities
+```{r}
+#https://userweb.eng.gla.ac.uk/umer.ijaz/bioinformatics/ecological.html
+library(ggdendro)
+ 
+#Transpose the data to have sample names on rows
+abund_table<-otu_table(merged_by_ss.phy)
+ 
+#Get grouping information
+#grouping_info<-data.frame(row.names=rownames(abund_table),t(as.data.frame(strsplit(rownames(abund_table),"_"))))
+grouping_info<-as.data.frame(merged_by_ss.phy@sam_data)
+#grouping_info$sp_habitat<-as.factor(grouping_info$sp_habitat)
+grouping_info$host_genus<-ifelse(grouping_info$t_sp1==1,"Amitermes",ifelse(grouping_info$t_sp1==2,"Microcerotermes",ifelse(grouping_info$t_sp1==3,"Nasutitermes","Coptotermes")))
+
+betad<-vegdist(abund_table,method="bray")
+ 
+# Use Adonis to test for overall differences
+res_adonis <- adonis(betad ~ t_sp, grouping_info) 
+ 
+#Cluster the samples
+hc <- hclust(betad)
+ 
+#We will color the labels according to countries(group_info[,1])
+hc_d <- dendro_data(as.dendrogram(hc))
+hc_d$labels$Type<-grouping_info[as.character(hc_d$labels$label),18]
+hc_d$labels$Type<-hc_d$labels$Type$host_genus
+#Coloring function
+gg_color_hue<-function(n){
+  hues=seq(15,375,length=n+1)
+  hcl(h=hues,l=65,c=100)[1:n]
+}
+ 
+cols=gg_color_hue(length(unique(hc_d$labels$Type)))
+#hc_d$labels$color=cols[hc_d$labels$Type]
+hc_d$labels$color=c(cols[1],cols[1],cols[2],cols[2],cols[2],cols[2],cols[2],cols[3],cols[3],cols[4],cols[4])
+
+## Plot clusters
+p1 <- ggplot(data = segment(hc_d)) +
+  geom_segment(aes(x=x, y=y, xend=xend, yend=yend)) +
+  coord_flip() +
+  scale_x_discrete(labels=label(hc_d)$label) +
+  ylab("Distance (beta diversity = bray)") + theme_bw()+
+  theme(axis.text.y = element_text(color = hc_d$labels$color),
+        axis.title.y = element_blank())
+#p1+geom_text(aes(x = x, y = y, label = label, angle = -90, hjust = 0), data= hc_d$label) +
+ # scale_y_continuous(expand = c(0.3, 0))
+p1 <- p1 + geom_point(data=hc_d$label, aes(x = x, y = y, color = Type), size=3,inherit.aes =F, alpha = 0)
+p1
+p1 <- p1 + guides(colour = guide_legend(override.aes = list(size=5, alpha = 1)))+
+  scale_color_manual(values = cols)
+p1
+pdf("Cluster.pdf",height=10)
+print(p1)
+dev.off()
+ggdendrogram(hc_d,rotate=T)+ geom_text(data=hc_d$labels,
+               aes(label(hc_d)$label, x=x, y=0, hc_d$labels$color))
+labs<-label(hc_d)
+p2 <- ggplot(segment(hc_d)) +
+  geom_segment(aes(x=x, y=y, xend=xend, yend=yend))
+p2 + geom_text(data=label(hc_d),
+               aes(label=label, x=x, y=0, colour=Type,size=.1))+coord_flip() +ylab("Distance (beta diversity = bray)") + theme_bw()+ geom_point(data=hc_d$label, aes(x = x, y = y, color = Type), inherit.aes =T, alpha = 0)
+```
+Same but without the merged samples
+```{r}
+#Transpose the data to have sample names on rows
+abund_table<-t(otu_table(ps8))
+ 
+#Get grouping information
+#grouping_info<-data.frame(row.names=rownames(abund_table),t(as.data.frame(strsplit(rownames(abund_table),"_"))))
+grouping_info<-as.data.frame(ps8@sam_data)
+grouping_info$sp_habitat<-as.factor(grouping_info$sp_habitat)
+betad<-vegdist(abund_table,method="bray")
+#Cluster the samples
+hc <- hclust(betad)
+#We will color the labels according to countries(group_info[,1])
+hc_d <- dendro_data(as.dendrogram(hc))
+hc_d$labels$Type<-grouping_info[as.character(hc_d$labels$label),17]
+hc_d$labels$Type<-hc_d$labels$Type$sp_habitat
+#Coloring function
+gg_color_hue<-function(n){
+  hues=seq(15,375,length=n+1)
+  hcl(h=hues,l=65,c=100)[1:n]
+}
+ 
+cols=gg_color_hue(length(unique(hc_d$labels$Type)))
+hc_d$labels$color=cols[hc_d$labels$Type]
+
+## Plot clusters
+p1 <- ggplot(data = segment(hc_d)) +
+  geom_segment(aes(x=x, y=y, xend=xend, yend=yend)) +
+  coord_flip() +
+  scale_x_discrete(labels=label(hc_d)$label) +
+  ylab("Distance (beta diversity = bray)") + theme_bw()+
+  theme(axis.text.y = element_text(color = hc_d$labels$color),
+        axis.title.y = element_blank())
+#p1+geom_text(aes(x = x, y = y, label = label, angle = -90, hjust = 0), data= hc_d$label) +
+ # scale_y_continuous(expand = c(0.3, 0))
+p1 <- p1 + geom_point(data=hc_d$label, aes(x = x, y = y, color = Type), size=3,inherit.aes =F, alpha = 0)
+p1
+p1 <- p1 + guides(colour = guide_legend(override.aes = list(size=5, alpha = 1)))+
+  scale_color_manual(values = cols)
+p1
+pdf("Cluster.pdf",height=10)
+print(p1)
+dev.off()
+ggdendrogram(hc_d,rotate=T)+ geom_text(data=hc_d$labels,
+               aes(label(hc_d)$label, x=x, y=0, label(hc_d)$color))
+labs<-label(hc_d)
+p2 <- ggplot(segment(hc_d)) +
+  geom_segment(aes(x=x, y=y, xend=xend, yend=yend))
+p2 + geom_text(data=label(hc_d),
+               aes(label=label, x=x, y=0, colour=Type,size=.01))+coord_flip() +ylab("Distance (beta diversity = bray)") + theme_bw()+ geom_point(data=hc_d$label, aes(x = x, y = y, color = Type), inherit.aes =T, alpha = 0)
+```
+Next steps: We used species accumulation curves to see the additive effect of sampling across distance for savanna sites. We used autocorrelelograms?
