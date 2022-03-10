@@ -750,26 +750,36 @@ nrow(zymo@otu_table) #85 OTUS, 9 genera, Jan: 85 OTUS
 nrow(zymo1@otu_table) #Jan: 9 genera
 
 #Subspecies of Microcerotermes
-Mserratus<-subset_samples(m_serratus1,t_sp=="M_serratus")
-MspG<-subset_samples(m_serratus1,t_sp=="M_sp_G")
+Mserratus<-subset_samples(m_serratus,t_sp=="M_serratus")
+MspG<-subset_samples(m_serratus,t_sp=="M_sp_G")
+Mserratus1<-subset_samples(m_serratus1,t_sp=="M_serratus")
+MspG1<-subset_samples(m_serratus1,t_sp=="M_sp_G")
 Mserratus2<-subset_samples(m_serratus2,t_sp=="M_serratus")
 MspG2<-subset_samples(m_serratus2,t_sp=="M_sp_G")
 
 
 # Microcerotermes
 ord.nmds.bray_micro <- ordinate(m_serratus, method="NMDS", distance="bray")
-m_serratus_plot<-phyloseq::plot_ordination(m_serratus, ord.nmds.bray_micro, color="Site1", title="Microcerotermes Bray NMDS genus")
+m_serratus_plot<-phyloseq::plot_ordination(m_serratus, ord.nmds.bray_micro, color="Site1",shape="t_sp", title="Microcerotermes Bray NMDS genus") # at the genus level
 m_serratus_plot<-m_serratus_plot + stat_ellipse(type="norm", linetype=1) +  theme_bw()
 #ordiellipse(ord.nmds.bray_micro, groups = "species", display = "sites", kind = "sd", conf = 0.95, col = "black", w = NULL)
 #nmds_phyloseq(m_serratus, treatment, method = 'bray', circle = 0.95,
 #labels = NULL, colors = 'default', verbose = TRUE)
 #try with transformed data
 ord.nmds.bray_micro2 <- ordinate(m_serratus2, method="NMDS", distance="bray")
-phyloseq::plot_ordination(m_serratus2, ord.nmds.bray_micro2, color="Site1", title="Microcerotermes Bray NMDS ps7")
+phyloseq::plot_ordination(m_serratus2, ord.nmds.bray_micro2, color="Site1", title="Microcerotermes Bray NMDS ps7") #with transformed data
 ord.nmds.bray_micro.tr <- ordinate(m_serratus1, method="NMDS", distance="bray")
-phyloseq::plot_ordination(m_serratus1, ord.nmds.bray_micro.tr, color="Site1", title="Microcerotermes Bray NMDS transformed")+ stat_ellipse(type="norm", linetype=1) +  theme_bw()
+phyloseq::plot_ordination(m_serratus1, ord.nmds.bray_micro.tr, color="Site1", title="Microcerotermes Bray NMDS transformed")+ stat_ellipse(type="norm", linetype=1) +  theme_bw() #with ASV level data
 plot_bar_plot(m_serratus,.,Site1,0.005)
 # Higher levels of ruminococcus (breaks down cellulose) in SCL and JCU
+# M_serratus vs M_sp_G
+ord.nmds.bray_micro_s <- ordinate(Mserratus1, method="NMDS", distance="bray")
+phyloseq::plot_ordination(Mserratus1, ord.nmds.bray_micro_s, color="Site1", title="Microcerotermes Bray NMDS ps.tr")
+#M_sp_G
+ord.nmds.bray_micro2 <- ordinate(MspG1, method="NMDS", distance="bray")
+phyloseq::plot_ordination(MspG1, ord.nmds.bray_micro2, color="Site1", title="Microcerotermes Bray NMDS ps.tr")
+
+
 
 #Amitermes
 ord.nmds.bray_ami <- ordinate(a_laurensis, method="NMDS", distance="bray")
@@ -911,7 +921,7 @@ summary(m1) # sample distance is not significant. same site and same species hav
 #bray; all significant
 
 a_model<-distance_phyloseq(a_laurensis1)
-a_bothsites<-ggplot(a_model,aes(sampledist,commdist)) + geom_point(aes(color=samesite))+ggtitle("Amitermes laurensis")+geom_smooth(method='lm')+theme_classic() #+stat_summary(fun.data=mean_cl_normal) +
+a_bothsites<-ggplot(a_model,aes(sampledist,commdist)) + geom_point(aes(color=samesite))+ggtitle("Amitermes laurensis")+geom_smooth(method='lm')+theme_classic()+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")+ labs(color = "Same site?") #+stat_summary(fun.data=mean_cl_normal) +
    #geom_smooth(method='lm',formula=commdist ~  sampledist *samesite, data=a_model)
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Amitermes_allsites.png")
 m2 <- lm(commdist ~  sampledist *samesite, data=a_model)
@@ -926,7 +936,7 @@ anova(m2,m2b) #not significant
 anova(m2,m2d) 
 
 c_model<-distance_phyloseq(c_acinaciformis1)
-c_bothsites<-ggplot(c_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("Coptotermes acinaciformis")+geom_smooth(method='lm')+theme_classic()
+c_bothsites<-ggplot(c_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("Coptotermes acinaciformis")+geom_smooth(method='lm')+theme_classic()+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")+ labs(color = "Same site?")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Coptotermes_allsites.png")
 m3 <- lm(commdist ~  sampledist +samesite, data=c_model)
 summary(m3) # no significance or interaction
@@ -934,13 +944,13 @@ m3b<-lm(commdist ~  samesite, data=c_model)
 summary(m3b) #yes significant
 
 m_model<-distance_phyloseq(m_serratus1)
-ggplot(m_model,aes(sampledist,commdist,color=samespec)) +geom_point(aes(shape=samesite))+ggtitle("Microcerotermes serratus")+geom_smooth(method="lm")
+ggplot(m_model,aes(sampledist,commdist,color=samespec)) +geom_point(aes(shape=samesite))+ggtitle("Microcerotermes serratus")+geom_smooth(method="lm")+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")+ labs(color = "Same species?",shape="Same site?")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_allsites.png")
 m4 <- lm(commdist ~  sampledist+samesite, data=m_model)
 summary(m4) #sample dist and samesiteyes is negatively associated unifrac and bray and jaccard
 
 ms_model<-distance_phyloseq(Mserratus)
-m1_bothsites<-ggplot(ms_model,aes(sampledist,commdist,shape=samespec)) +geom_point(aes(color=samesite))+ggtitle("Microcerotermes serratus")+geom_smooth(method="lm")+theme_classic()
+m1_bothsites<-ggplot(ms_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("Microcerotermes serratus")+geom_smooth(method="lm")+theme_classic()+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")+ labs(color = "Same site?")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_serratus_allsites.png")
 m4s <- lm(commdist ~  sampledist+samesite, data=ms_model)
 summary(m4s) #sample dist and samesiteyes is negatively associated unifrac and bray and jaccard
@@ -948,13 +958,13 @@ m4s <- lm(commdist ~  samesite, data=ms_model)
 summary(m4s) # yes samesite is lower.
 
 mG_model<-distance_phyloseq(MspG)
-m2_bothsites<-ggplot(mG_model,aes(sampledist,commdist,shape=samespec)) +geom_point(aes(shape=samespec,color=samesite))+ggtitle("Microcerotermes sp G")+geom_smooth(method="lm")+theme_classic()
+m2_bothsites<-ggplot(mG_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("Microcerotermes sp G")+geom_smooth(method="lm")+theme_classic()+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")+ labs(color = "Same site?")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_spG_allsites.png")
 m4 <- lm(commdist ~  sampledist+samesite, data=m_model)
 summary(m4) #sample dist and samesiteyes is negatively associated unifrac and bray and jaccard
 
 n_model<-distance_phyloseq(n_magnus1)
-n_bothsites<-ggplot(n_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("Nasutitermes magnus")+geom_smooth(method='lm')+theme_classic()
+n_bothsites<-ggplot(n_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("Nasutitermes magnus")+geom_smooth(method='lm')+theme_classic()+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")+ labs(color = "Same site?")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Nasutitermes_allsites.png")
 m5 <- lm(commdist ~  sampledist+samesite, data=n_model)
 summary(m5) #sampledist, samesiteyes have negative association, positive interaction for unifrac and bray.
@@ -967,21 +977,22 @@ ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/multiplot_al
 pw_sc<-subset_samples(ps7,Site %in% c("SC","PW"))
 pw_sc<-prune_taxa(taxa_sums(pw_sc)>0, pw_sc)
 pw_sc_model<-distance_phyloseq(pw_sc)
-ggplot(pw_sc_model,aes(sampledist,commdist)) +geom_point(aes(color=samespec,shape=samesite))+ggtitle("Only savanna sites")
+ggplot(pw_sc_model,aes(sampledist,commdist,color=samespec)) +geom_point(aes(color=samespec,shape=samesite))+ggtitle("All species, savanna sites")+geom_smooth(method='lm')+theme_classic()+ylab("Bray-Curtis community distance") + xlab("Geographical distance (m)")+ labs(color = "Same species?",shape="Same site?")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/allsp_Savanna.png")
-m6 <- lm(commdist ~  sampledist+samesite, data=pw_sc_model)
+m6 <- lm(commdist ~  samespec+sampledist+samesite, data=pw_sc_model)
 summary(m6) #all significant unifrac. significant interaction between sample dist and samesite yes lollll
+confint(m6)
 
 # amitermes each site
 a_pw<-subset_samples(a_laurensis1,Site=="PW")
 a_pw_model<-distance_phyloseq(a_pw)
-apw_plot<-ggplot(a_pw_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav1 Amitermes")+ geom_smooth(method='lm')
+apw_plot<-ggplot(a_pw_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav1 Amitermes")+ geom_smooth(method='lm')+theme_classic()+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")+ labs(color = "Same site?")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Amitermes_PW.png")
 m7 <- lm(commdist ~  sampledist, data=a_pw_model)
 summary(m7) # not significant
 a_sc<-subset_samples(a_laurensis1,Site=="SC")
 a_sc_model<-distance_phyloseq(a_sc)
-asc_plot<-ggplot(a_sc_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav2 Amitermes")+ geom_smooth(method='lm')
+asc_plot<-ggplot(a_sc_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav2 Amitermes")+ geom_smooth(method='lm')+theme_classic()+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Amitermes_SC.png")
 m8 <- lm(commdist ~  sampledist, data=a_sc_model)
 summary(m8) #not significant
@@ -989,26 +1000,26 @@ summary(m8) #not significant
 # nasutitermes each site
 n_pw<-subset_samples(n_magnus1,Site=="PW")
 n_pw_model<-distance_phyloseq(n_pw)
-npw_plot<-ggplot(n_pw_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav1 Nasutitermes")+ geom_smooth(method='lm')
+npw_plot<-ggplot(n_pw_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav1 Nasutitermes")+ geom_smooth(method='lm')+theme_classic()+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Nasutitermes_PW.png")
 m9 <- lm(commdist ~  sampledist, data=n_pw_model)
 summary(m9) # yes significant unifrac and jaccard and bray
 n_sc<-subset_samples(n_magnus1,Site=="SC")
 n_sc_model<-distance_phyloseq(n_sc)
-nsc_plot<-ggplot(n_sc_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav2 Nasutitermes")+ geom_smooth(method='lm')
+nsc_plot<-ggplot(n_sc_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav2 Nasutitermes")+ geom_smooth(method='lm')+theme_classic()+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Nasutitermes_SC.png")
 m10 <- lm(commdist ~  sampledist, data=n_sc_model)
 summary(m10) # not significant
 # coptotermes each site
 c_pw<-subset_samples(c_acinaciformis1,Site=="PW")
 c_pw_model<-distance_phyloseq(c_pw)
-cpw_plot<-ggplot(c_pw_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav1 Coptotermes")+ geom_smooth(method='lm')
+cpw_plot<-ggplot(c_pw_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav1 Coptotermes")+ geom_smooth(method='lm')+theme_classic()+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Coptotermes_PW.png")
 m11 <- lm(commdist ~  sampledist, data=c_pw_model)
 summary(m11) # not significant
 c_sc<-subset_samples(c_acinaciformis1,Site=="SC")
 c_sc_model<-distance_phyloseq(c_sc)
-csc_plot<-ggplot(c_sc_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav2 Coptotermes")+ geom_smooth(method='lm')
+csc_plot<-ggplot(c_sc_model,aes(sampledist,commdist)) +geom_point()+ggtitle("Sav2 Coptotermes")+ geom_smooth(method='lm')+theme_classic()+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Coptotermes_SC.png")
 m12 <- lm(commdist ~  sampledist, data=c_sc_model)
 summary(m12) #not significant
@@ -1017,31 +1028,31 @@ multiplot(apw_plot,npw_plot,cpw_plot,asc_plot,nsc_plot,csc_plot,cols=2)
 # microcerotermes each site
 m_pw<-subset_samples(m_serratus1,Site=="PW")
 m_pw_model<-distance_phyloseq(m_pw)
-ggplot(m_pw_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("PW Microcerotermes")
+ggplot(m_pw_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("PW Microcerotermes")+theme_classic()+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_PW.png")
 m13 <- lm(commdist ~  sampledist, data=m_pw_model)
 summary(m13) # not significant
 m_sc<-subset_samples(m_serratus1,Site=="SC")
 m_sc_model<-distance_phyloseq(m_sc)
-ggplot(m_sc_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("SC Microcerotermes")
+ggplot(m_sc_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("SC Microcerotermes")+theme_classic()+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_SC.png")
 m14 <- lm(commdist ~  sampledist, data=m_sc_model)
 summary(m14) #not significant
 m_ms<-subset_samples(m_serratus1,Site=="MS")
 m_ms_model<-distance_phyloseq(m_ms)
-ggplot(m_ms_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("MS Microcerotermes")
+ggplot(m_ms_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("MS Microcerotermes")+theme_classic()+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_MS.png")
 m15 <- lm(commdist ~  sampledist, data=m_ms_model)
 summary(m15) #not significant
 m_jc<-subset_samples(m_serratus1,Site=="JC")
 m_jc_model<-distance_phyloseq(m_jc)
-ggplot(m_jc_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("JC Microcerotermes")
+ggplot(m_jc_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("JC Microcerotermes")+theme_classic()+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_JC.png")
 m16 <- lm(commdist ~  sampledist, data=m_jc_model)
 summary(m16) # not significant
 m_rr<-subset_samples(m_serratus1,Site=="RR")
 m_rr_model<-distance_phyloseq(m_rr)
-ggplot(m_rr_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("RR Microcerotermes")
+ggplot(m_rr_model,aes(sampledist,commdist)) +geom_point(aes(color=samesite))+ggtitle("RR Microcerotermes")+theme_classic()+ylab("Bray-Curtis distance") + xlab("Geographical distance (m)")
 ggsave("~/Box/termite_microbiome/Dada2/Jan2022/plots/distances_bray/Microcerotermes_RR.png")
 m17 <- lm(commdist ~  sampledist, data=m_rr_model)
 summary(m17) #not significant with unifrac, but significant with jaccard and bray
@@ -1084,10 +1095,12 @@ t1<-adonis(jaccd~diversityRAREF_Q1$category+diversityRAREF_Q1$Feeding_Route1, st
 ## 4) Compare beta diversity with ordination. (ex. NMDS)
 ```{r}
 # Transform data to proportions as appropriate for Bray-Curtis distances
-ps.prop_all <- transform_sample_counts(ps6, function(otu) otu/sum(otu))
+ps.prop_all <- transform_sample_counts(ps8, function(otu) otu/sum(otu))
 ord.nmds.bray_all <- ordinate(ps.prop_all, method="NMDS", distance="bray")
 
-phyloseq::plot_ordination(ps.prop_all, ord.nmds.bray_all, color="t_sp", title="Bray NMDS",label="X.NAME") #ugh this is terrible. it just separates by sequencing group
+phyloseq::plot_ordination(ps.prop_all, ord.nmds.bray_all, color="t_sp",shape="Site1", title="Bray NMDS")+  theme_bw()#+ stat_ellipse(type="norm", linetype=1)  #
+
+stressplot(ord.nmds.bray_all)
 
 ```
 
@@ -1372,8 +1385,11 @@ abund_prev_plot <- function(ps8) {
                  FUN = function(x){sum(x > 0)})
   # Add taxonomy and total read counts to this data.frame
   prevdf = data.frame(Prevalence = prevdf,
-                      TotalAbundance = taxa_sums(ps),
-                      tax_table(ps))
+                      TotalAbundance = taxa_sums(ps))#,
+                      #tax_table(ps))
+  prevdf$Phylum<-as.vector(tax_table(ps)[,2])
+  prevdf$Family<-tax_table(ps)[,5]
+  prevdf$Genus<-tax_table(ps)[,6]
   # Are there taxa that are comprised of mostly low-prevalence features?
   sum_reads<-sum(prevdf$TotalAbundance)
  prev_rel<- plyr::ddply(prevdf, "Phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence),sum(df1$TotalAbundance),sum(df1$TotalAbundance)/sum_reads)}) # add total abundance, relative abundance here.
@@ -1382,25 +1398,31 @@ abund_prev_plot <- function(ps8) {
  prev_rel<-prev_rel[order(-prev_rel$Rel_abundance),]
  prev_rel$Rel_abundance<-percent(prev_rel$Rel_abundance,accuracy = .1)
   # Define phyla to filter --ones that are fewer than 100 total prevalence
-  filterPhyla = c("Bdellovibrionota", "Campilobacterota","Chloroflexi","Deferribacterota","MBNT15","Myxococcota","Patescibacteria","WPS-2")
+  #filterPhyla = c("Bdellovibrionota", "Campilobacterota","Chloroflexi","Deferribacterota","MBNT15","Myxococcota","Patescibacteria","WPS-2")
   # Filter entries with unidentified Phylum.
-  ps_prev = subset_taxa(ps, !Phylum %in% filterPhyla)
-  ps_prev
-  prevdf1 = subset(prevdf, Phylum %in% get_taxa_unique(ps_prev, "Phylum"))
-  #prevdf1 = subset(prevdf, Phylum %in% get_taxa_unique(ps, "Phylum"))
+  #ps_prev = subset_taxa(ps, !Phylum %in% filterPhyla)
+  #ps_prev
+  #prevdf1 = subset(prevdf, Phylum %in% get_taxa_unique(ps_prev, "Phylum"))
+  prevdf1 = subset(prevdf, Phylum %in% get_taxa_unique(ps, "Phylum"))
   ggplot(prevdf1, aes(TotalAbundance, Prevalence / nsamples(ps),color=Phylum)) +
     # Include a guess for parameter
     geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2) +  geom_point(size = 2, alpha = 0.7) +
     scale_x_log10() +  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
     facet_wrap(~Phylum) + theme(legend.position="none")+ggtitle(ps@sam_data$t_sp1)
-  return(prev_rel)
+  #return(prev_rel)
   
 }
 abund_prev_plot(ps8)
 abund_prev_plot(m_serratus1)
+abund_prev_plot(m_serratus) #clustered by genus
 abund_prev(a_laurensis1)
+abund_prev(a_laurensis)
 abund_prev(n_magnus1)
+abund_prev(n_magnus)
+nas_prevrel<-prevdf1
 abund_prev(c_acinaciformis1)
+abund_prev(c_acinaciformis)
+c_prevdf<-prevdf1
 
 ```
 Shared taxa
@@ -1786,7 +1808,7 @@ row.names(tax9)<-tax9$Name
 ps9<-phyloseq(sample_data(ps8@sam_data),tax_table(as.matrix(tax9)), otu_table(EC_table, taxa_are_rows = TRUE))
 
 ord.nmds.bray_fun<- ordinate(ps9, method="NMDS", distance="bray")
-phyloseq::plot_ordination(ps9, ord.nmds.bray_fun, color="t_sp",shape="Site2", title="Bray NMDS Pathway")+   theme_bw()#stat_ellipse(type="norm", linetype=1) +
+phyloseq::plot_ordination(ps9, ord.nmds.bray_fun, color="t_sp",shape="Site2", title="Bray NMDS Pathway")+   theme_bw()+geom_polygon() + geom_point(size=5)#+stat_ellipse(type="norm", linetype=1) 
 
 # Subset these
 a_laurensis3<-subset_samples(ps9,t_sp1=="Amitermes") #with whole data
@@ -1856,7 +1878,7 @@ nrow(sigtab3_M10)
 ps9@sam_data$sp_habitat<-paste(ps9@sam_data$t_sp,ps9@sam_data$Site2)
 merged_by_ss.fun = merge_samples(ps9, "sp_habitat")
 merged_by_ss.df_fun <-as.data.frame(t(merged_by_ss.fun@otu_table))
-dim(merged_by_ss.df_fun) #264x11
+dim(merged_by_ss.df_fun) #423x11
 merged_by_ss.df_fun[merged_by_ss.df_fun>0]<-1 #convert table to presence/absence
 merged_by_ss.df_fun$ASV<-rownames(merged_by_ss.df_fun)
 vennMerged_fun <- merged_by_ss.df_fun %>%
@@ -1872,6 +1894,8 @@ upset_fun<-upset(merged_by_ss.df_fun,
       decreasing = T,
   mainbar.y.label = "Shared function prevalence across species and sites", sets.x.label = "Total EC functions"
 )
+upset_fun
+
 ```
 
 Three barplots on top of each other https://jokergoo.github.io/ComplexHeatmap-reference/book/upset-plot.html
@@ -1930,7 +1954,7 @@ nrow(sigtab_feed_phylum)
 sigtab_feed_phylum[,c("Phylum","log2FoldChange")]
 sigtab_sav_phylum<-deseq_seqtab(ps.byphylum,Site2,"Sav1","Sav2")
 nrow(sigtab_sav_phylum)
-sigtab_sav_phylum[,c("Phylum","log2FoldChange")]
+sigtab_sav_phylum[,c("Phylum","baseMean","log2FoldChange")]
 sigtab_A_phylum<-deseq_seqtab(a_laurensis_phylum,Site2,"Sav1","Sav2")
 nrow(sigtab_A_phylum)
 sigtab_N_phylum<-deseq_seqtab(n_magnus_phylum,Site2,"Sav1","Sav2")
@@ -2000,11 +2024,19 @@ ps.any.f <- filter_taxa(ps.any.tr, function (x) mean(x) > keep_percent, TRUE)
 ```
 Bar plot with common Pathways?
 ```{r}
+#Combine all the ones that start with PWY
+
+# add a label here that includes both phylum and genus
+myranks = c("Phylum", "Genus")
+Phylum_Genus = apply(tax_table(ps_arch)[, myranks], 1, paste, sep="", collapse=": ")
+# Add concatenated labels as a new rank after strain
+tax_table(ps_arch) <- cbind(tax_table(ps_arch), catglab=Phylum_Genus)
+
 
 ps.any.tr <- transform_sample_counts(ps9, function (x) x / sum(x))
 keep_percent<-.008
 ps.any.f <- filter_taxa(ps.any.tr, function (x) mean(x) > keep_percent, TRUE) 
-  patho.by_any_plot <- plot_bar(ps.any.f, "Sample", "Abundance","EC")
+  patho.by_any_plot <- plot_bar(ps.any.f, "Sample", "Abundance","catglab")
   ps.by_fun_plot <- patho.by_any_plot + 
     theme_classic() + 
     #facet_wrap(~t_sp1, scales="free_x")+
@@ -2035,6 +2067,25 @@ arch_plot<-plot_bar(merged_by_ss.archaea,"Sample", "Abundance",fill="catglab")
 arch_plot+ylab("Relative Abundance")+xlab("")+facet_grid( .~ t_sp1, scales = "free", space = "free")+theme_classic() +
     theme(axis.text.x = element_text(angle = 90, vjust=0.5, hjust=0))+labs(fill="Phylum: Genus")
 ```
+Planctomycetota
+```{r}
+```{r}
+ps_planct<-subset_taxa(ps.bygenus.tr, Phylum=="Planctomycetota" )
+# add a label here that includes both phylum and genus
+myranks = c("Family", "Genus")
+Family_Genus = apply(tax_table(ps_planct)[, myranks], 1, paste, sep="", collapse=": ")
+# Add concatenated labels as a new rank after strain
+tax_table(ps_planct) <- cbind(tax_table(ps_planct), catglab=Family_Genus)
+#add the sp_habitat category and merge samples
+ps_planct@sam_data$sp_habitat<-paste(ps_planct@sam_data$t_sp,ps_planct@sam_data$Site2)
+merged_by_ss.planct = merge_samples(ps_planct, "sp_habitat")
+
+
+planct_plot<-plot_bar(merged_by_ss.planct,"Sample", "Abundance",fill="catglab")
+planct_plot+ylab("Relative Abundance")+xlab("")+facet_grid( .~ t_sp1, scales = "free", space = "free")+theme_classic() +
+    theme(axis.text.x = element_text(angle = 90, vjust=0.5, hjust=0))+labs(fill="Family: Genus")
+```
+
 
 ```{r}
 # heat map
@@ -2165,3 +2216,10 @@ p2 + geom_text(data=label(hc_d),
                aes(label=label, x=x, y=0, colour=Type,size=.01))+coord_flip() +ylab("Distance (beta diversity = bray)") + theme_bw()+ geom_point(data=hc_d$label, aes(x = x, y = y, color = Type), inherit.aes =T, alpha = 0)
 ```
 Next steps: We used species accumulation curves to see the additive effect of sampling across distance for savanna sites. We used autocorrelelograms?
+
+Fig. Species accumulation curve with distance on x axis?
+Fig. autocorrelelogram which shows how many meters becomes a different thing?
+Fig 3.  Photos of the termites:)
+https://cran.r-project.org/web/packages/acnr/vignettes/autocorrelation.html
+
+Which species had the greatest betadiversity within site? 
