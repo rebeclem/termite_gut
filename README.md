@@ -16,4 +16,6 @@ Where raw data is stored on pegasus: /groups/cbi/Users/rclement
 3. [FastQC and Flexbar](fastqc.md)
 4. [Count](readcounts.md) cleaned and raw reads
 5. [Run pathoscope](pathoscope.md) and count reads
-6. Visualize data
+6. Dada2 for [Batch 1](termite_dada2.R) and [Batch 2](termite_dada2_part2.R)
+7. [Visualize data](combined_dada2.Rmd) and further analyses in R
+8. [Make some maps in R](Map_making.Rmd)
