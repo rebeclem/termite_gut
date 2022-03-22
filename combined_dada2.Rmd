@@ -4,11 +4,11 @@ author: "Rebecca Clement"
 date: "4/2/2021"
 output: html_document
 editor_options: 
-  chunk_output_type: console
   
   This should read in two seqtables, combine them and then run assign taxonomy on them. Updated December 21, 2021
   
   For maps for this project, see the map_making file
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
