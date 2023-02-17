@@ -42,7 +42,7 @@ Using vim, remove the first line that says "accession".
 Now that I have this file, I need to use bowtie to make it into a database. First you have to make sure it's in the right format with ti numbers first. 
 Use the script /groups/cbi/Databases/Genomes/scripts/build_nasute.sh
 
-I need to change the tid in scripts/nasute_fasta_from_acc.py to whatever the nasutitermes tid is. 
+I need to change the tid in [scripts/nasute_fasta_from_acc.py](scripts/nasute_fasta_from_acc.py) to whatever the nasutitermes tid is. 
 
 
 start in archive. 
