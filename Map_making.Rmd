@@ -29,7 +29,7 @@ Sites<-read.table(header=TRUE, text ='
 Site lat lon Habitat
 Pennyweight -16.56932	144.913989 Savanna
 Station_Creek -16.611732	145.240890 Savanna
-Mt_Lewis_Sclerophyll -16.5828	145.26105 Intermediate
+Mt_Lewis_Sclerophyll -16.5828	145.26105 Sclerophyll
 JCU -16.813150 145.687256 Rainforest
 RR -16.1747194 145.4148556 Rainforest
 ')
@@ -64,31 +64,32 @@ myMap <- get_stamenmap(bbox = c(left=144.85,
 #set colors
 cols <- c("#F6A924","#F6A924","#969A2E","Dark Green","Dark Green")#,"Red","Red","Red")
 #change order of legend
+Sites$Habitat<-as.factor(Sites$Habitat)
 levels(Sites$Habitat)
-Sites$Habitat<-factor(Sites$Habitat,levels=c("Savanna", "Sclerophyll", "Rainforest"))
+Sites$Habitat<-factor(Sites$Habitat,levels=c("Savanna","Sclerophyll", "Rainforest"))
 # plot map
 mapwbase<-ggmap(myMap) +geom_point(data=Sites, aes(x=lon, y=lat,fill = Habitat), shape = 23,size=6) + #c(7,7,7,7,7))+#,3.5,3.5,3.5))+ #,fill=cols
   #scale_fill_manual(values = cols) +
- geom_text(data = Sites, aes(x=lon+0.01, y=lat, label = c("Pennyweight (Sav1) \n","\nStation Creek (Sav2)","  Mt. Lewis (Scl1)","JCU","  Rainforest\nRescue (RR)")),size = 4,hjust = "left",fontface = "bold") + 
+ geom_text(data = Sites, aes(x=lon+0.01, y=lat, label = c("Pennyweight (Sav1) \n","\nStation Creek (Sav2)","  Mt. Lewis (Scl1)","JCU \n(RftJ)","  Rainforest\nRescue (RftR)")),size = 8,hjust = "left",fontface = "bold") + 
   #geom_text(data = Sites, aes(x=lon+0.01, y=lat, label = c("","","","","","W1","W2","W3\n")),color='red',size = 5,hjust = "left") +
  labs(x="Longitude", y="Latitude") +
  theme_classic()  +
     scalebar(x.min = 144.85, x.max = 145.8,
                    y.min = -16.93, y.max = -16,
                    dist = 10, dist_unit = "km",
-                   st.bottom = T, st.color = "red", st.size=5,location="topleft",
+                   st.bottom = T, st.color = "red", st.size=6,location="topleft",
              transform = TRUE, model = "WGS84") +
-  scale_fill_manual(values=c("Dark Green","#F6A924","#969A2E"))+
+  scale_fill_manual(values=c("#F6A924","#969A2E","Dark Green"))+
   theme(
   legend.title = element_text( size = 20),
   legend.text = element_text( size = 18)
-  )+ theme(legend.position = c(0.2, 0.8))
+  )+ theme(legend.position = c(0.3, 0.7))
 
 mapwbase
 
 # make a png file (you have to do this outside of rmd)
 # 1. Open jpeg file
-png("~/Box/Clement_TermiteGut_16S_0108/Figures/Site_map_microbiome2.png", width=1024, height=768)
+png("~/Box/termite_microbiome/Figures/Site_map_microbiome2.png", width=624, height=568)
 # 2. Create the plot
 plot(mapwbase)
 dev.off()
@@ -146,11 +147,11 @@ micro_map <- function(sites2, site_name) {
 Station Creek
 ```{r}
 scmmplot<-site_map(sites2,"SC")
-scmmplot+ scalebar(x.min = min(scmmplot$data$lon)+.01, x.max = max(scmmplot$data$lon)-.01,
+scmmplot<-scmmplot+ scalebar(x.min = min(scmmplot$data$lon)+.01, x.max = max(scmmplot$data$lon)-.01,
              y.min = min(scmmplot$data$lat)+.01, y.max = max(scmmplot$data$lat)-.01,
              dist = 1, dist_unit = "km", st.size=4, st.dist=.04, #st.size is font size, dist is the scale, st.dist is distance between scale and text
              st.bottom = TRUE, st.color = "red", 
-             transform = TRUE, model = "WGS84", location="topright",height=.03) 
+             transform = TRUE, model = "WGS84", location="topright",height=.03) + ggtitle("Station Creek (Sav1)")
 ggsave("~/Box/termite_microbiome/Figures/habitatpix/sc_plot.png", scale = 0.75, width = 8,height = 7, units = c("in"), dpi = 300)
 
 ```
@@ -162,8 +163,10 @@ pwmmplot<-ppmmplot+scalebar(x.min = min(ppmmplot$data$lon)+.01, x.max = max(ppmm
              y.min = min(ppmmplot$data$lat)+.01, y.max = max(ppmmplot$data$lat)-.01,
              dist = 1, dist_unit = "km", st.size=4, st.dist=.04, #st.size is font size, dist is the scale, st.dist is distance between scale and text
              st.bottom = TRUE, st.color = "red", 
-             transform = TRUE, model = "WGS84", location="topright",height=.03) 
+             transform = TRUE, model = "WGS84", location="topright",height=.03) +ggtitle("Pennyweight savanna (Sav2)")#+ theme(legend.position="none")
+pwmmplot
 ggsave("~/Box/termite_microbiome/Figures/habitatpix/pw_plot.png", scale = 0.75, width = 8,height = 7, units = c("in"), dpi = 300)
+multiplot(pwmmplot,scmmplot,cols=2)
 ```
 
 Plot map of Mt. Lewis Sclerophyll
@@ -173,7 +176,7 @@ msmmplot +
     scalebar(x.min = min(msmmplot$data$lon)+.0001, x.max = max(msmmplot$data$lon)-.0001,
              y.min = min(msmmplot$data$lat)+.0001, y.max = max(msmmplot$data$lat)-.0001, dist = 10, dist_unit = "m", st.size=4, st.dist=.06, #st.size is font size, dist is the scale, st.dist is distance between scale and text
              st.bottom = TRUE, st.color = "red", 
-             transform = TRUE, model = "WGS84", location="topright",height=.03) 
+             transform = TRUE, model = "WGS84", location="topright",height=.03) +ggtitle("Mt. Lewis Sclerophyll (Scl1)")
 ggsave("~/Box/termite_microbiome/Figures/habitatpix/ms_plot.png", scale = 0.75, width = 8,height = 7, units = c("in"), dpi = 300)
 
 
@@ -185,7 +188,7 @@ rrmmplot+
     scalebar(x.min = min(rrmmplot$data$lon)+.0001, x.max = max(rrmmplot$data$lon)-.0001,
              y.min = min(rrmmplot$data$lat)+.0001, y.max = max(rrmmplot$data$lat)-.0001, dist = 20, dist_unit = "m", st.size=4, st.dist=.06, #st.size is font size, dist is the scale, st.dist is distance between scale and text
              st.bottom = TRUE, st.color = "red", 
-             transform = TRUE, model = "WGS84", location="topright",height=.03)
+             transform = TRUE, model = "WGS84", location="topright",height=.03)+ggtitle("Rainforest Rescue (RftR)")
 ggsave("~/Box/termite_microbiome/Figures/habitatpix/rr_plot.png", scale = 0.75, width = 8,height = 7, units = c("in"), dpi = 300)
 ```
 Plot map of JCU
@@ -195,7 +198,7 @@ jcmmplot+
     scalebar(x.min = min(jcmmplot$data$lon)+.0005, x.max = max(jcmmplot$data$lon)-.0005,
              y.min = min(jcmmplot$data$lat)+.0005, y.max = max(jcmmplot$data$lat)-.0005, dist = 50, dist_unit = "m", st.size=4, st.dist=.08, #st.size is font size, dist is the scale, st.dist is distance between scale and text
              st.bottom = TRUE, st.color = "red", 
-             transform = TRUE, model = "WGS84", location="topright",height=.03)
+             transform = TRUE, model = "WGS84", location="topright",height=.03)+ggtitle("JCU (RftJ)")
 ggsave("~/Box/termite_microbiome/Figures/habitatpix/jc_plot.png", scale = 0.75, width = 8,height = 7, units = c("in"), dpi = 300)
 ```
 Multiplot function
